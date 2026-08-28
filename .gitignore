@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Dati: rigenerabili, non si versionano
+data/
+
+
+# Ambiente e IDE
+.venv/
+.idea/
+.env
+
+# Prove locali
+src/test.py
