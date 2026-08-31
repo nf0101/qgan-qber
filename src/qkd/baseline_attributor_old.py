@@ -182,7 +182,7 @@ def evaluate_binary_classification(df, feature_cols):
 
 def main():
     parser = argparse.ArgumentParser(description="Attributore Baselina Classico QKD (Fase 1 - Parte B)")
-    parser.add_argument("--data", type=str, default="qber_grid.csv", help="Percorso del file contenente la griglia QBER")
+    parser.add_argument("--data", type=str, default="src/data/qber_grid.csv", help="Percorso del file contenente la griglia QBER")
     args = parser.parse_args()
 
     file_path = args.data

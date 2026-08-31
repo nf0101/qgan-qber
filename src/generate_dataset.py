@@ -32,7 +32,7 @@ from BB84_crn import run_bb84, windows
 
 INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 0.75, 1.0]
 LENGTHS_KM = [5.0, 10.0, 20.0, 40.0]
-DEPOLAR_TOTALS = [0.01, 0.03, 0.06]
+DEPOLAR_TOTALS = [0.01, 0.02, 0.03, 0.045, 0.06]
 
 SEEDS = [1, 2, 3, 4, 5]
 NUM_BITS = 100_000          # riferimento a 10 km
@@ -41,7 +41,7 @@ WINDOW = 200
 P_DETECTOR_ERR = 0.01
 P_LOSS_LENGTH = 0.2
 
-OUT = Path("data/qber_grid.csv")
+OUT = Path("../data/qber_grid.csv")
 
 SMOKE = dict(rates=INTERCEPT_RATES[:2], lengths=LENGTHS_KM[:2],
              depols=DEPOLAR_TOTALS[:1], seeds=SEEDS[:1], scale=0.2)
