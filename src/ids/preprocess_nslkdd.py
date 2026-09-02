@@ -50,7 +50,7 @@ from nslkdd_common import (CATEGORICAL, SEED, TOP_SERVICES, VAL_FRACTION,
                            _read)
 
 OUT = Path("data/ids")
-K = 6
+K = 5
 RATIOS = {"1_200": 200, "1_500": 500, "1_1000": 1000}
 PCA_MODES = ["local", "global"]
 

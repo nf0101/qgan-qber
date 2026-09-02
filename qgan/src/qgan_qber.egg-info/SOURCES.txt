@@ -1,0 +1,12 @@
+pyproject.toml
+src/qgan/__init__.py
+src/qgan/autoregressive.py
+src/qgan/circuit.py
+src/qgan/discriminator.py
+src/qgan/metrics.py
+src/qgan/model.py
+src/qgan_qber.egg-info/PKG-INFO
+src/qgan_qber.egg-info/SOURCES.txt
+src/qgan_qber.egg-info/dependency_links.txt
+src/qgan_qber.egg-info/top_level.txt
+tests/test_correctness.py

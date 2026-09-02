@@ -4,95 +4,95 @@
     "ratio":"1_1000",
     "pca":"global",
     "model":"gb",
-    "f1_mean":0.8561333097,
-    "recall_mean":0.751951952
+    "f1_mean":0.8567062636,
+    "recall_mean":0.7524667525
   },
   {
     "class":"probe",
     "ratio":"1_1000",
     "pca":"local",
     "model":"gb",
-    "f1_mean":0.8758611186,
-    "recall_mean":0.7855855856
+    "f1_mean":0.8560409145,
+    "recall_mean":0.7568425568
   },
   {
     "class":"probe",
     "ratio":"1_200",
     "pca":"global",
     "model":"gb",
-    "f1_mean":0.9520705211,
-    "recall_mean":0.9139425139
+    "f1_mean":0.9513223761,
+    "recall_mean":0.9148863149
   },
   {
     "class":"probe",
     "ratio":"1_200",
     "pca":"local",
     "model":"gb",
-    "f1_mean":0.9620745612,
-    "recall_mean":0.934019734
+    "f1_mean":0.9597722812,
+    "recall_mean":0.9323895324
   },
   {
     "class":"probe",
     "ratio":"1_500",
     "pca":"global",
     "model":"gb",
-    "f1_mean":0.8865410803,
-    "recall_mean":0.8000858001
+    "f1_mean":0.8850324336,
+    "recall_mean":0.7981123981
   },
   {
     "class":"probe",
     "ratio":"1_500",
     "pca":"local",
     "model":"gb",
-    "f1_mean":0.910695951,
-    "recall_mean":0.8421278421
+    "f1_mean":0.8865049641,
+    "recall_mean":0.8021450021
   },
   {
     "class":"r2l",
     "ratio":"1_1000",
     "pca":"global",
     "model":"rf",
-    "f1_mean":0.795396869,
-    "recall_mean":0.6603015075
+    "f1_mean":0.8062232808,
+    "recall_mean":0.6753768844
   },
   {
     "class":"r2l",
     "ratio":"1_1000",
     "pca":"local",
     "model":"rf",
-    "f1_mean":0.804787598,
-    "recall_mean":0.6733668342
+    "f1_mean":0.7724465186,
+    "recall_mean":0.6311557789
   },
   {
     "class":"r2l",
     "ratio":"1_200",
     "pca":"global",
     "model":"rf",
-    "f1_mean":0.9245512064,
-    "recall_mean":0.8683417085
+    "f1_mean":0.9260865805,
+    "recall_mean":0.8693467337
   },
   {
     "class":"r2l",
     "ratio":"1_200",
     "pca":"local",
     "model":"rf",
-    "f1_mean":0.9342478092,
-    "recall_mean":0.8854271357
+    "f1_mean":0.9139753554,
+    "recall_mean":0.8542713568
   },
   {
     "class":"r2l",
     "ratio":"1_500",
     "pca":"global",
     "model":"rf",
-    "f1_mean":0.8796751414,
-    "recall_mean":0.7899497487
+    "f1_mean":0.8857834684,
+    "recall_mean":0.7989949749
   },
   {
     "class":"r2l",
     "ratio":"1_500",
     "pca":"local",
     "model":"rf",
-    "f1_mean":0.8827112349,
-    "recall_mean":0.7979899497
+    "f1_mean":0.8385641026,
+    "recall_mean":0.7386934673
   }
 ]

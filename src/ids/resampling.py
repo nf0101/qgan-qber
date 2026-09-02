@@ -44,7 +44,7 @@ OUT = Path("results")
 
 CLASSES = ["probe", "r2l"]
 RATIOS = ["1_200", "1_500", "1_1000"]
-MODE = "global"          # la variante PCA non e' il fuoco di questo confronto
+MODE = "global"
 SEEDS = [1, 2, 3, 4, 5]
 
 

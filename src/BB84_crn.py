@@ -325,24 +325,65 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
     return stats, records
 
 
-def windows(records, size=WINDOW):
-    """Aggrega i record in finestre: e' la riga del dataset per la QGAN."""
+import numpy as np
+
+SUBBLOCKS = 4  # sotto-blocchi per il calcolo di qber_stability
+
+
+def windows(records, size=200, subblocks=SUBBLOCKS):
+    """Aggrega i record per posizione in finestre temporali.
+
+    Ogni finestra e' una riga del dataset: feature osservabili piu'
+    frazioni causali (il target di O3).
+
+    qber_stability: la finestra e' divisa in `subblocks` blocchi contigui
+    di uguale lunghezza; si calcola il QBER di ciascuno e se ne prende la
+    deviazione standard. Cattura l'instabilita' temporale entro la
+    finestra, dimensione assente dalle altre osservabili.
+
+    AVVERTENZA. Con QBER basso il numero di errori per sotto-blocco e'
+    prossimo a zero e la statistica diventa rumorosa: a QBER 1,5 % su una
+    finestra da 200 posizioni ci si attendono circa 3 errori distribuiti
+    su 4 blocchi. Il comportamento va verificato e riportato.
+    """
     out = []
     for s in range(0, len(records) - size + 1, size):
         w = records[s:s + size]
         n = len(w)
+
+        errors = [r["error"] for r in w]
+        qber = sum(errors) / n
+
+        # --- QBER per base ---
+        rect = [r for r in w if r["basis"] == 0]
+        diag = [r for r in w if r["basis"] == 1]
+        qber_rect = (sum(r["error"] for r in rect) / len(rect)) if rect else 0.0
+        qber_diag = (sum(r["error"] for r in diag) / len(diag)) if diag else 0.0
+
+        # --- instabilita' temporale ---
+        bs = max(1, n // subblocks)
+        sub = [errors[i:i + bs] for i in range(0, n, bs)]
+        sub = [b for b in sub if len(b) >= bs // 2]  # scarta code corte
+        sub_qber = [sum(b) / len(b) for b in sub]
+        qber_stability = float(np.std(sub_qber)) if len(sub_qber) > 1 else 0.0
+
+        # --- frazioni causali (target, non osservabili) ---
         cf = {k: sum(r[k] for r in w) / n
               for k in ("cf_canale", "cf_eve", "cf_rivelatore")}
         tot = sum(cf.values())
+
         out.append({
-            "t_start": w[0]["t"], "n": n,
-            "qber": sum(r["error"] for r in w) / n,
-            "qber_rect": (sum(r["error"] for r in w if r["basis"] == 0) /
-                          max(1, sum(1 for r in w if r["basis"] == 0))),
-            "qber_diag": (sum(r["error"] for r in w if r["basis"] == 1) /
-                          max(1, sum(1 for r in w if r["basis"] == 1))),
+            "t_start": w[0]["t"],
+            "n": n,
+            # ---- osservabili ----
+            "qber": qber,
+            "qber_rect": qber_rect,
+            "qber_diag": qber_diag,
+            "basis_asymmetry": abs(qber_rect - qber_diag),  # candidata A
+            "qber_stability": qber_stability,  # candidata B
+            "n_subblocks": len(sub_qber),
+            # ---- controfattuali e target ----
             **{f"qber_{k}": v for k, v in cf.items()},
-            # vettore di frazioni causali: il target di O3
             **{f"f_{k.split('_')[1]}": (v / tot if tot > 0 else 0.0)
                for k, v in cf.items()},
         })

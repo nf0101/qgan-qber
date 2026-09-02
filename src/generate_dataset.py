@@ -30,18 +30,25 @@ from BB84_crn import run_bb84, windows
 # La griglia e' generata PER INTERO: le celle held-out si scelgono in fase
 # di addestramento, perche' per valutare RQ2 serve la verita' anche li'.
 
-INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 0.75, 1.0]
+#INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 0.75, 1.0]
 LENGTHS_KM = [5.0, 10.0, 20.0, 40.0]
 DEPOLAR_TOTALS = [0.01, 0.02, 0.03, 0.045, 0.06]
 
-SEEDS = [1, 2, 3, 4, 5]
+#SEEDS = [1, 2, 3, 4, 5]
+
+###################
+SEEDS = [1]
+INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 1.0]
+OUT = Path("data/qber_grid_small.csv")
+####################
+
 NUM_BITS = 100_000          # riferimento a 10 km
 WINDOW = 200
 
 P_DETECTOR_ERR = 0.01
 P_LOSS_LENGTH = 0.2
 
-OUT = Path("../data/qber_grid.csv")
+#OUT = Path("../data/qber_grid.csv")
 
 SMOKE = dict(rates=INTERCEPT_RATES[:2], lengths=LENGTHS_KM[:2],
              depols=DEPOLAR_TOTALS[:1], seeds=SEEDS[:1], scale=0.2)
@@ -101,6 +108,8 @@ def run_cell(rate, length, depolar, seed, num_bits, window):
         "qber_rect": w["qber_rect"],
         "qber_diag": w["qber_diag"],
         "basis_asymmetry": abs(w["qber_rect"] - w["qber_diag"]),
+        "qber_stability": w["qber_stability"],
+        "n_subblocks": w["n_subblocks"],
         "sift_rate": len(rec) / num_bits,
         "loss_rate": stats["loss_rate"],
         "n_window": w["n"],
