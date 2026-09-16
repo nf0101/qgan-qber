@@ -1,0 +1,1 @@
+ invertito seme 0  MMD 0.1167 -> 0.0413 (+64.6%)  det 0.925

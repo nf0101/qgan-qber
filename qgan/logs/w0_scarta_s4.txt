@@ -1,0 +1,5 @@
+[seme 4]
+  finestre   teacher forcing 0.02495   generazione libera 0.03069   deriva x1.2
+  MMD per passo t=0..15: 0.096 0.017 0.013 0.026 0.021 0.021 0.019 0.027 0.015 0.021 0.013 0.019 0.022 0.023 0.023 0.021
+  autocorr.  reale +0.965   sintetica +0.752   MAE 0.168
+  variabilita' nel tempo  reale 0.03069   sintetica 0.04159

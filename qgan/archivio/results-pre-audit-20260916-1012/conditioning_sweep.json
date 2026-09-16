@@ -1,0 +1,134 @@
+{
+  "ampiezza": [
+    {
+      "cond_scale": 1.5707963267948966,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 0.019673651081075657,
+      "sensibilita_min": 0.006712437235009546,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 0.05947042372563005
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 0.029567642052180987,
+      "sensibilita_min": 0.0019214892920740485,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 0.08926376939930046
+    },
+    {
+      "cond_scale": 6.283185307179586,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 4.810966440042345e-17,
+      "sensibilita_min": 0.0,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 1.4570331943569972e-16
+    },
+    {
+      "cond_scale": 12.566370614359172,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 4.810966440042345e-17,
+      "sensibilita_min": 0.0,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 1.4570331943569972e-16
+    },
+    {
+      "cond_scale": 25.132741228718345,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 5.1810407815840633e-17,
+      "sensibilita_min": 0.0,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 1.5741563214806413e-16
+    }
+  ],
+  "latente": [
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 0.7853981633974483,
+      "theta_amp": 0.1,
+      "sensibilita": 0.020324913868631393,
+      "sensibilita_min": 0.008602094121541679,
+      "dispersione": 0.0467434877247313,
+      "rapporto": 0.43653300433051756
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 1.5707963267948966,
+      "theta_amp": 0.1,
+      "sensibilita": 0.03619704405593344,
+      "sensibilita_min": 0.017368993065080617,
+      "dispersione": 0.15288534688913022,
+      "rapporto": 0.23651694885576338
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 0.029567642052180987,
+      "sensibilita_min": 0.0019214892920740485,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 0.08926376939930046
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 6.283185307179586,
+      "theta_amp": 0.1,
+      "sensibilita": 0.0013993336506665677,
+      "sensibilita_min": 0.00023661954158878581,
+      "dispersione": 0.3314770376863251,
+      "rapporto": 0.00422632605811728
+    }
+  ],
+  "theta": [
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.1,
+      "sensibilita": 0.029567642052180987,
+      "sensibilita_min": 0.0019214892920740485,
+      "dispersione": 0.33058169596047854,
+      "rapporto": 0.08926376939930046
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.3,
+      "sensibilita": 0.08227810370550304,
+      "sensibilita_min": 0.015747975896043893,
+      "dispersione": 0.30859480794515487,
+      "rapporto": 0.26648844701124524
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 0.5,
+      "sensibilita": 0.11583494913908492,
+      "sensibilita_min": 0.022913906438572423,
+      "dispersione": 0.26842886233533486,
+      "rapporto": 0.4315748478310248
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 1.0,
+      "sensibilita": 0.125616330627734,
+      "sensibilita_min": 0.02100688496867627,
+      "dispersione": 0.15338961403968374,
+      "rapporto": 0.8168704705564308
+    },
+    {
+      "cond_scale": 3.141592653589793,
+      "latent_hi": 3.141592653589793,
+      "theta_amp": 1.5,
+      "sensibilita": 0.059112124129990166,
+      "sensibilita_min": 0.0023766762603859384,
+      "dispersione": 0.10885504796377769,
+      "rapporto": 0.531559220696738
+    }
+  ]
+}

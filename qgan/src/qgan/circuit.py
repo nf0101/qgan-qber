@@ -29,6 +29,52 @@ from qiskit_aer import AerSimulator
 _SHIFT = np.pi / 2
 
 
+def cond_index_map(d_c: int, n_qubits: int, n_layers: int) -> list[list[int]]:
+    """Indici di ``c`` letti da ciascuno strato di condizionamento.
+
+    Per ``d_c <= n_qubits`` riproduce ESATTAMENTE la mappatura congelata da
+    SPEC-FASE2 §12 (ogni strato legge ``c[q % d_c]``): tutto cio' che e' gia'
+    stato eseguito con d_c in {0, 1, 3, 5} resta bit-identico e la misura di
+    O1 non va rifatta.
+
+    Per ``d_c > n_qubits`` gli strati leggono blocchi consecutivi sfalsati di
+    ``n_qubits``, cosi' che ogni componente compaia almeno una volta nel
+    circuito. Non aggiunge parametri addestrabili ne' profondita': usa le
+    posizioni di condizionamento che gia' esistono.
+
+    La versione precedente calcolava ``c[q % d_c]`` in entrambi gli strati.
+    Con d_c=8 e 5 qubit questo lasciava fuori dal circuito c[5], c[6] e c[7],
+    cioe' le ultime tre osservabili della finestra precedente nella modalita'
+    autoregressiva di §6. Il discriminatore riceveva invece tutte e otto le
+    componenti.
+
+    Con 2 strati e 5 qubit ci sono 10 posizioni per 8 componenti: due
+    componenti compaiono due volte. La mappatura le fa cadere su c[0] e c[1],
+    cioe' sulle prime due componenti del condizionamento statico, che sono
+    quelle su cui RQ2 misura la risposta.
+
+    Esempi
+    ------
+    d_c=3, 5 qubit, 2 strati -> [[0,1,2,0,1], [0,1,2,0,1]]   (invariato)
+    d_c=8, 5 qubit, 2 strati -> [[0,1,2,3,4], [5,6,7,0,1]]   (copertura piena)
+    """
+    if d_c <= 0:
+        return [[] for _ in range(n_layers)]
+    capienza = n_qubits * n_layers
+    if d_c > capienza:
+        raise ValueError(
+            f"d_c={d_c} eccede la capienza del condizionamento "
+            f"({n_layers} strati x {n_qubits} qubit = {capienza} posizioni). "
+            "Ridurre d_c, aumentare cond_layers, oppure dichiarare "
+            "esplicitamente uno schema di encoding alternativo."
+        )
+    if d_c <= n_qubits:
+        # ramo congelato: identico al comportamento precedente alla correzione
+        return [[q % d_c for q in range(n_qubits)] for _ in range(n_layers)]
+    return [[(layer * n_qubits + q) % d_c for q in range(n_qubits)]
+            for layer in range(n_layers)]
+
+
 class QuantumGenerator:
     """Circuito generatore e relativo motore di valutazione.
 
@@ -58,6 +104,7 @@ class QuantumGenerator:
         reps: int = 4,
         d_c: int = 0,
         cond_layers: int = 2,
+        cond_scale: float = np.pi,
         max_parallel_experiments: int = 0,
         max_circuits_per_call: int = 32_768,
     ) -> None:
@@ -67,6 +114,7 @@ class QuantumGenerator:
         self.reps = int(reps)
         self.d_c = int(d_c)
         self.cond_layers = int(cond_layers) if self.d_c > 0 else 0
+        self.cond_scale = float(cond_scale)
         self.latent_dim = self.n_qubits
         self.max_circuits_per_call = int(max_circuits_per_call)
 
@@ -75,8 +123,23 @@ class QuantumGenerator:
         self._z = ParameterVector("z", self.n_qubits)
         self._th = ParameterVector("th", self.n_params)
         self._c = ParameterVector("c", self.d_c) if self.d_c > 0 else []
+        self._cond_map = cond_index_map(
+            self.d_c, self.n_qubits, self.cond_layers
+        )
 
         self.circuit = self._build()
+        # Il difetto non deve poter rientrare in silenzio: se una componente
+        # di c non compare fra i parametri del circuito, la costruzione
+        # fallisce qui invece di produrre un modello che ignora parte del
+        # condizionamento senza segnalarlo.
+        if self.d_c > 0:
+            presenti = {p.name for p in self.circuit.parameters}
+            assenti = [p.name for p in self._c if p.name not in presenti]
+            if assenti:
+                raise RuntimeError(
+                    f"componenti di c assenti dal circuito: {assenti}. "
+                    "La mappatura di condizionamento non copre tutto c."
+                )
         self.sim = AerSimulator(
             method="statevector",
             max_parallel_experiments=max_parallel_experiments,
@@ -98,18 +161,22 @@ class QuantumGenerator:
     # ------------------------------------------------------------------ #
     # Costruzione del circuito
     # ------------------------------------------------------------------ #
-    def _cond_layer(self, qc: QuantumCircuit) -> None:
+    def _cond_layer(self, qc: QuantumCircuit, layer: int) -> None:
         """Strato di condizionamento: RZ(pi * c_j) su ciascun qubit.
 
-        Con d_c < n_qubits il vettore c viene ripetuto ciclicamente sui
-        qubit. La ripetizione dello stesso strato in due punti distinti del
-        circuito e' il data re-uploading richiesto dalla specifica: non
-        introduce parametri addestrabili, quindi il conteggio resta 50.
+        Gli indici letti da questo strato sono decisi da ``cond_index_map``.
+        Con d_c <= n_qubits il vettore c viene ripetuto ciclicamente sui
+        qubit, identico a entrambi gli strati; con d_c > n_qubits gli strati
+        leggono blocchi sfalsati, cosi' che nessuna componente resti fuori.
+
+        La ripetizione del condizionamento in due punti distinti del circuito
+        e' il data re-uploading richiesto dalla specifica: non introduce
+        parametri addestrabili, quindi il conteggio resta 50.
         """
         if self.d_c == 0:
             return
-        for q in range(self.n_qubits):
-            qc.rz(np.pi * self._c[q % self.d_c], q)
+        for q, j in enumerate(self._cond_map[layer]):
+            qc.rz(self.cond_scale * self._c[j], q)
 
     def _entangle(self, qc: QuantumCircuit) -> None:
         for q in range(self.n_qubits - 1):
@@ -126,7 +193,7 @@ class QuantumGenerator:
 
         # --- condizionamento, primo strato -----------------------------
         if self.cond_layers >= 1:
-            self._cond_layer(qc)
+            self._cond_layer(qc, 0)
             qc.barrier()
 
         # --- ansatz EfficientSU2 ---------------------------------------
@@ -141,7 +208,7 @@ class QuantumGenerator:
                 self._entangle(qc)
             if r == mid and self.cond_layers >= 2:
                 qc.barrier()
-                self._cond_layer(qc)
+                self._cond_layer(qc, 1)
                 qc.barrier()
             for q in range(n):
                 qc.ry(self._th[k], q)
@@ -233,6 +300,68 @@ class QuantumGenerator:
         return X, J
 
     # ------------------------------------------------------------------ #
+    def conditioning_sensitivity(
+        self, theta: np.ndarray, n: int = 300, seed: int = 0,
+        latent_hi: float | None = None,
+    ) -> dict:
+        """Quanto l'uscita risponde a `c`, rispetto a quanto risponde a `z`.
+
+        Diagnostico indispensabile: la presenza dei gate di condizionamento nel
+        circuito non implica che l'uscita ne dipenda in misura utilizzabile. Se
+        la sensibilita' e' molto minore della dispersione indotta dal latente,
+        il segnale di `c` resta sommerso e il discriminatore, che riceve `c` in
+        chiaro, vince il gioco senza che il generatore possa rispondere.
+        """
+        if self.d_c == 0:
+            raise ValueError("il generatore non e' condizionato")
+        rng = np.random.default_rng(seed)
+        Z = rng.uniform(0.0, np.pi if latent_hi is None else latent_hi,
+                        (n, self.n_qubits))
+        lo = self.forward(theta, Z, np.zeros((n, self.d_c)))
+        hi = self.forward(theta, Z, np.ones((n, self.d_c)))
+        per_feature = np.abs(hi.mean(axis=0) - lo.mean(axis=0))
+        spread = lo.std(axis=0)
+        return {
+            "per_feature": per_feature.tolist(),
+            "media": float(per_feature.mean()),
+            "minimo": float(per_feature.min()),
+            "dispersione_latente": float(spread.mean()),
+            "rapporto": float(per_feature.mean() / max(spread.mean(), 1e-12)),
+        }
+
+    def input_sensitivity(
+        self, theta: np.ndarray, n: int = 200, seed: int = 0,
+        latent_hi: float | list | None = None, delta: float = 1.0,
+    ) -> np.ndarray:
+        """Risposta dell'uscita a CIASCUNA componente di c, presa da sola.
+
+        ``conditioning_sensitivity`` varia tutte le componenti insieme e
+        riporta la risposta per feature di USCITA. E' quindi cieca a una
+        componente di INGRESSO che non entra nel circuito: e' la ragione per
+        cui la suite ha dichiarato «c influenza ogni feature» mentre tre
+        delle otto componenti non comparivano fra i parametri del circuito.
+
+        Returns
+        -------
+        (d_c,) : per ogni componente j, il massimo sulle feature di uscita di
+        |media(x | c_j = delta) - media(x | c = 0)|. Una componente che non
+        entra nel circuito da' esattamente 0.
+        """
+        if self.d_c == 0:
+            raise ValueError("il generatore non e' condizionato")
+        rng = np.random.default_rng(seed)
+        hi = np.pi if latent_hi is None else latent_hi
+        Z = rng.uniform(0.0, hi, (n, self.n_qubits))
+        base = self.forward(theta, Z, np.zeros((n, self.d_c))).mean(axis=0)
+        out = np.zeros(self.d_c)
+        for j in range(self.d_c):
+            C = np.zeros((n, self.d_c))
+            C[:, j] = delta
+            out[j] = float(
+                np.abs(self.forward(theta, Z, C).mean(axis=0) - base).max()
+            )
+        return out
+
     def circuits_per_gradient(self, batch_size: int) -> int:
         """Numero di circuiti di un passo di gradiente (diagnostico)."""
         return batch_size * (1 + 2 * self.n_params)
@@ -243,6 +372,8 @@ class QuantumGenerator:
             "reps": self.reps,
             "d_c": self.d_c,
             "cond_layers": self.cond_layers,
+            "cond_map": [list(m) for m in self._cond_map],
+            "cond_scale": self.cond_scale,
             "n_params": self.n_params,
             "depth": self._tqc.depth(),
             "size": self._tqc.size(),

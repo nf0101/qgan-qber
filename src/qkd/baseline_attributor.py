@@ -56,13 +56,28 @@ from sklearn.preprocessing import StandardScaler
 # Nomi canonici con i rispettivi alias accettati, cosi' che lo script
 # resti applicabile a dataset generati con nomenclature diverse.
 
+# SPEC-FASE2 §1.2 fissa CINQUE osservabili. `basis_asymmetry` e' stata
+# esclusa in §1.4: e' il valore assoluto della differenza fra qber_rect e
+# qber_diag, quindi ridondante per costruzione, e la verifica sperimentale non
+# ha trovato differenze distinguibili dal rumore in alcun protocollo.
+#
+# Il numero di feature vincola il numero di qubit del generatore e deve restare
+# allineato al dominio IDS, altrimenti O1 non e' misurabile. Aggiungerne una
+# qui invaliderebbe il confronto.
 FEATURE_ALIASES = {
     "qber": ["qber", "qber_tot", "qber_total"],
     "qber_rect": ["qber_rect", "qber_z", "qber_rectilinear"],
     "qber_diag": ["qber_diag", "qber_x", "qber_diagonal"],
-    "basis_asymmetry": ["basis_asymmetry", "basis_asym", "asymmetry"],
     "sift_rate": ["sift_rate", "sifting_rate", "sift"],
     "loss_rate": ["loss_rate", "channel_loss_rate", "loss"],
+}
+
+# Osservabili verificate e deliberatamente non impiegate, con il riferimento
+# alla verifica. Elencate perche' la loro assenza sia una scelta documentata e
+# non una dimenticanza.
+FEATURE_ESCLUSE = {
+    "basis_asymmetry": "SPEC §1.4: ridondante, |qber_rect - qber_diag|",
+    "qber_stability": "SPEC §1.4: verificata, nessun contributo marginale",
 }
 
 TARGET_ALIASES = {
@@ -113,12 +128,6 @@ def resolve(df, aliases, kind):
 def load(path):
     df = pd.read_csv(path)
 
-    # basis_asymmetry e' derivabile se assente
-    if not any(n in df.columns for n in FEATURE_ALIASES["basis_asymmetry"]):
-        rect = next(n for n in FEATURE_ALIASES["qber_rect"] if n in df.columns)
-        diag = next(n for n in FEATURE_ALIASES["qber_diag"] if n in df.columns)
-        df["basis_asymmetry"] = (df[rect] - df[diag]).abs()
-
     feat = resolve(df, FEATURE_ALIASES, "osservabili")
     targ = resolve(df, TARGET_ALIASES, "target")
     cell = resolve(df, CELL_ALIASES, "di cella")
@@ -129,6 +138,12 @@ def load(path):
                          f"(alias: {', '.join(SEED_ALIASES)})")
 
     # controllo di fuga: nessuna feature deve derivare dalla verita' causale
+    if len(feat) != 5:
+        raise ValueError(
+            f"{len(feat)} osservabili invece di 5. Il numero di feature e'"
+            " congelato da SPEC-FASE2 §1.1 e determina il numero di qubit del"
+            " generatore: cambiarlo qui rende O1 non misurabile.")
+
     leaky = [c for c in feat.values()
              if c.startswith(LEAKY_PREFIXES) and c not in targ.values()]
     if leaky:
@@ -294,7 +309,12 @@ def binary(df, cells, feat, cell_cols, attack_col, n=N_REPEATS):
 def main(path, models, final=False):
     df, feat, targ, cell_cols, seed_col = load(path)
     print(f"dataset : {len(df):,} righe")
-    print(f"feature : {feat}")
+    print(f"feature : {feat}  ({len(feat)}, SPEC-FASE2 §1.2)")
+    presenti = [c for c in FEATURE_ESCLUSE if c in df.columns]
+    if presenti:
+        print(f"escluse : {presenti}")
+        for c in presenti:
+            print(f"          {c}: {FEATURE_ESCLUSE[c]}")
     print(f"target  : {targ}")
     print(f"celle   : {cell_cols}, seme '{seed_col}'")
     print(f"config. fisiche: {df[cell_cols].drop_duplicates().shape[0]}, "

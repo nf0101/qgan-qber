@@ -1,0 +1,7 @@
+[seme 0]
+  controllo: MMD sul training  iniziale 1.0675  cond 0.0148  incond 0.0985
+  risposta r=+0.948   MMD celle escluse: cond 0.0661  incond 0.3067  guadagno +0.2406
+  posizione: MAE cond 0.0332  banale 0.0565  SKILL +0.412  (incond -0.467)
+  dispersione: vera 0.0372  generata 0.0275
+  per osservabile:  sift_rate 0.0345/0.0032   qber_rect 0.0347/0.0702   qber 0.0267/0.0575   loss_rate 0.0131/0.0015   qber_diag 0.0284/0.0714
+  conflitto:  theta_init 0.10  z<=[0.734] (incond 3.142)  c/z 0.618->11.610  Var(g) min 1.99e-05  dispersione gen 0.1499 (reale 0.1664)

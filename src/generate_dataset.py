@@ -16,7 +16,10 @@ Uso:
 
 import argparse
 import csv
+import hashlib
 import itertools
+import json
+import subprocess
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -30,17 +33,13 @@ from BB84_crn import run_bb84, windows
 # La griglia e' generata PER INTERO: le celle held-out si scelgono in fase
 # di addestramento, perche' per valutare RQ2 serve la verita' anche li'.
 
-#INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 0.75, 1.0]
+INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 0.75, 1.0]
 LENGTHS_KM = [5.0, 10.0, 20.0, 40.0]
 DEPOLAR_TOTALS = [0.01, 0.02, 0.03, 0.045, 0.06]
 
-#SEEDS = [1, 2, 3, 4, 5]
+SEEDS = [1, 2, 3, 4, 5]
 
-###################
-SEEDS = [1]
-INTERCEPT_RATES = [0.0, 0.10, 0.25, 0.50, 1.0]
-OUT = Path("data/qber_grid_small.csv")
-####################
+
 
 NUM_BITS = 100_000          # riferimento a 10 km
 WINDOW = 200
@@ -48,7 +47,12 @@ WINDOW = 200
 P_DETECTOR_ERR = 0.01
 P_LOSS_LENGTH = 0.2
 
-#OUT = Path("../data/qber_grid.csv")
+# Ancorato alla posizione dello script, non alla directory corrente.
+# Il valore precedente, "../data/qber_grid.csv", si risolveva in modo diverso
+# a seconda di dove veniva lanciato: e' cosi' che sono finite in giro tre
+# griglie con nomi che non le distinguono, piu' un qber_grid_small.csv da
+# ZERO byte accanto a un omonimo da 3,4 MB in un'altra directory.
+OUT = Path(__file__).resolve().parent.parent / "data" / "qber_grid.csv"
 
 SMOKE = dict(rates=INTERCEPT_RATES[:2], lengths=LENGTHS_KM[:2],
              depols=DEPOLAR_TOTALS[:1], seeds=SEEDS[:1], scale=0.2)
@@ -60,6 +64,43 @@ def bits_for(length, scale=1.0):
     trasmittanza = 10 ** (-P_LOSS_LENGTH * length / 10)
     rif = 10 ** (-P_LOSS_LENGTH * 10.0 / 10)      # trasmittanza a 10 km
     return int(NUM_BITS * scale * rif / trasmittanza)
+
+
+def versione_codice():
+    """Revisione git, con marcatore se il working tree e' sporco."""
+    qui = Path(__file__).resolve().parent
+    try:
+        rev = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"],
+                                      cwd=qui, stderr=subprocess.DEVNULL,
+                                      timeout=5).decode().strip()
+        sporco = subprocess.check_output(["git", "status", "--porcelain"],
+                                         cwd=qui, stderr=subprocess.DEVNULL,
+                                         timeout=5).decode().strip()
+        return rev + ("+modificato" if sporco else "")
+    except Exception:
+        return None
+
+
+def metadati(smoke, workers, parallel, out):
+    """Configurazione completa della generazione, scritta accanto al CSV.
+
+    La griglia precedente non portava con se' ne' la configurazione ne' la
+    versione del codice: stabilire quale delle tre griglie trovate in giro
+    fosse la sorgente dei raggi di B.2 ha richiesto di rieseguire lo script
+    di calibrazione su ciascuna e confrontare i numeri.
+    """
+    return {
+        "intercept_rates": INTERCEPT_RATES, "lengths_km": LENGTHS_KM,
+        "depolar_totals": DEPOLAR_TOTALS, "seeds": SEEDS,
+        "num_bits_riferimento": NUM_BITS, "window": WINDOW,
+        "p_detector_err": P_DETECTOR_ERR, "p_loss_length": P_LOSS_LENGTH,
+        "eve_position": m.EVE_POSITION,
+        "accoppia_misure": m.ACCOPPIA_MISURE,
+        "smoke": smoke, "parallelo": parallel, "workers": workers,
+        "versione_codice": versione_codice(),
+        "istante": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "out": str(out),
+    }
 
 
 def grid(smoke=False):
@@ -90,9 +131,10 @@ def configure(length, depolar, seed):
 def run_cell(rate, length, depolar, seed, num_bits, window):
     configure(length, depolar, seed)
     t0 = time.time()
-    stats, rec = run_bb84(intercept_rate=rate, num_bits=num_bits,
-                          seed=seed, verbose=False)
-    ws = windows(rec, size=window)
+    stats, rec, ricevute = run_bb84(intercept_rate=rate, num_bits=num_bits,
+                                    seed=seed, verbose=False,
+                                    con_ricevute=True)
+    ws = windows(rec, size=window, ricevute=ricevute)
     elapsed = time.time() - t0
 
     rows = [{
@@ -107,12 +149,21 @@ def run_cell(rate, length, depolar, seed, num_bits, window):
         "qber": w["qber"],
         "qber_rect": w["qber_rect"],
         "qber_diag": w["qber_diag"],
-        "basis_asymmetry": abs(w["qber_rect"] - w["qber_diag"]),
+        "basis_asymmetry": w["basis_asymmetry"],
         "qber_stability": w["qber_stability"],
         "n_subblocks": w["n_subblocks"],
-        "sift_rate": len(rec) / num_bits,
-        "loss_rate": stats["loss_rate"],
+        # sift_rate e loss_rate vengono dalla FINESTRA. Prima erano
+        # `len(rec)/num_bits` e `stats["loss_rate"]`, cioe' due scalari PER
+        # CORSA replicati identici su tutte le finestre della cella: nella
+        # griglia precedente hanno esattamente un valore distinto per cella,
+        # su tutte e 600. Due qubit su cinque modellavano costanti gia'
+        # determinate da c, la disparita' di dispersione fra osservabili
+        # risultava 47x invece di ~2,6x, e in modalita' autoregressiva due
+        # delle cinque componenti di w_{t-1} erano costanti lungo la traccia.
+        "sift_rate": w["sift_rate"],
+        "loss_rate": w["loss_rate"],
         "n_window": w["n"],
+        "n_grezze": w["n_grezze"],
         "t_start": w["t_start"],
         # ---- target causale (NON osservabile) ----
         "f_canale": w["f_canale"],
@@ -176,7 +227,15 @@ def generate(smoke=False, workers=None, parallel=True):
     tasks = grid(smoke=smoke)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    state = {"writer": None, "written": 0, "vuote": 0}
+    state = {"writer": None, "written": 0, "vuote": 0, "incoerenti": 0}
+
+    meta = metadati(smoke, workers, parallel, OUT)
+    print(f"codice {meta['versione_codice']}   accoppiamento misure "
+          f"{'attivo' if m.ACCOPPIA_MISURE else 'DISATTIVATO'}")
+    if not m.ACCOPPIA_MISURE:
+        print("ATTENZIONE: senza accoppiamento le condizioni non restano "
+              "appaiate posizione per posizione e i controfattuali non sono "
+              "fondati. Interrompere.")
 
     print(f"celle: {len(tasks)}   modo: "
           f"{'parallelo' if parallel else 'seriale'}"
@@ -184,6 +243,14 @@ def generate(smoke=False, workers=None, parallel=True):
 
     def handle(fh, n, rows, el, st, args):
         rate, L, dep, seed = args[0], args[1], args[2], args[3]
+        # Coerenza fra catena modellata e catena eseguita, su OGNI cella.
+        # Costa zero: e' gia' calcolata in run_bb84. Meglio accorgersene
+        # alla cella 12 che a sei ore di simulazione finite.
+        if st.get("discordanze"):
+            state["incoerenti"] += 1
+            print(f"[{n}/{len(tasks)}] INCOERENTE r={rate} L={L} dep={dep} "
+                  f"seed={seed} -- {st['discordanze']}/"
+                  f"{st['n_non_intercettati']} discordanze analitico/osservato")
         if not rows:
             state["vuote"] += 1
             print(f"[{n}/{len(tasks)}] VUOTA r={rate} L={L} dep={dep} "
@@ -210,9 +277,23 @@ def generate(smoke=False, workers=None, parallel=True):
                 rows, el, st = run_cell(*args)
                 handle(fh, n, rows, el, st, args)
 
+    meta["finestre_scritte"] = state["written"]
+    meta["celle_vuote"] = state["vuote"]
+    meta["celle_incoerenti"] = state["incoerenti"]
+    meta["durata_min"] = round((time.time() - t0) / 60, 2)
+    meta["sha256"] = hashlib.sha256(OUT.read_bytes()).hexdigest()
+    perc_meta = OUT.with_suffix(".meta.json")
+    perc_meta.write_text(json.dumps(meta, indent=2, default=str))
+
     print(f"\nscritte {state['written']} finestre in {OUT}")
+    print(f"impronta sha256: {meta['sha256']}")
+    print(f"metadati in {perc_meta}")
     if state["vuote"]:
         print(f"ATTENZIONE: {state['vuote']} celle vuote (alza NUM_BITS)")
+    if state["incoerenti"]:
+        print(f"ATTENZIONE: {state['incoerenti']} celle con discordanze fra "
+              "errore analitico e osservato. La catena modellata non e' "
+              "quella eseguita: NON usare questa griglia.")
     print(f"tempo totale: {(time.time() - t0) / 60:.1f} min")
 
 
@@ -222,7 +303,12 @@ if __name__ == "__main__":
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--serial", action="store_true")
     ap.add_argument("--workers", type=int, default=None)
+    ap.add_argument("--out", type=Path, default=None,
+                    help="percorso del CSV; default data/qber_grid.csv "
+                         "accanto alla radice del progetto")
     a = ap.parse_args()
+    if a.out is not None:
+        OUT = a.out
 
     if a.benchmark:
         benchmark()

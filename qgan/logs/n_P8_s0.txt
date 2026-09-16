@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/nf0101/PycharmProjects/Quantum/qgan-qber/qgan/scripts/cond_validation.py", line 41, in <module>
+    from qgan import QGAN, metrics  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nf0101/PycharmProjects/Quantum/qgan-qber/qgan/scripts/../src/qgan/__init__.py", line 8, in <module>
+    from .circuit import QuantumGenerator
+  File "/home/nf0101/PycharmProjects/Quantum/qgan-qber/qgan/scripts/../src/qgan/circuit.py", line 23, in <module>
+    from qiskit import QuantumCircuit, transpile
+ModuleNotFoundError: No module named 'qiskit'

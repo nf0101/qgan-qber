@@ -17,7 +17,6 @@ STATO: non eseguito dall'autore. Le API di base (Message header, FibreLossModel,
 lose_qubit, attributi custom sul qubit) sono verificate su NetSquid 1.1.8.
 """
 
-import random
 import numpy as np
 
 import netsquid as ns
@@ -57,9 +56,63 @@ DEPOLAR_SEG = DEPOLAR_TOTAL / 2.0
 PAULI = {0: None, 1: "X", 2: "Y", 3: "Z"}
 
 
+# Identificatori NUMERICI delle sorgenti. La versione precedente derivava il
+# seed da `abs(hash((seed, tag, idx)))` con tag stringa: l'hash delle stringhe
+# in Python e' randomizzato per processo, quindi (1, 'eve', 10) produceva
+# 2600891174 in un processo e 3562695232 in un altro. Gli stessi parametri
+# nominali non identificavano gli stessi flussi casuali fra esecuzioni, e la
+# riproducibilita' promessa dal modulo CRN non c'era.
+TAG_ID = {
+    "loss_s1": 1, "loss_s2": 2, "depol_s1": 3, "depol_s2": 4,
+    "eve": 5, "det": 6, "eve_meas": 7, "bob_meas": 8,
+    "bits": 9, "a_bases": 10, "b_bases": 11,
+}
+
+
+def seme_derivato(seed, tag, idx):
+    """Seed a 32 bit stabile fra processi, da SeedSequence e non da hash()."""
+    if tag not in TAG_ID:
+        raise KeyError(f"sorgente non registrata in TAG_ID: {tag!r}")
+    ss = np.random.SeedSequence([int(seed), TAG_ID[tag], int(idx)])
+    return int(ss.generate_state(1, dtype=np.uint32)[0])
+
+
 def stream(seed, tag, idx):
-    """RNG indipendente per (esperimento, sorgente, posizione)."""
-    return np.random.RandomState(abs(hash((seed, tag, idx))) % (2 ** 32))
+    """RNG indipendente per (esperimento, sorgente, posizione).
+
+    Resta RandomState e non default_rng: lose_qubit e il resto del modulo
+    usano l'API legacy (.random_sample()), quindi il tipo non va cambiato.
+    """
+    return np.random.RandomState(seme_derivato(seed, tag, idx))
+
+
+# ---------------------------------------------------------------------
+# Accoppiamento delle misure quantistiche
+#
+# measure() pesca dallo stato casuale GLOBALE di NetSquid, che non era
+# inizializzato da nessuna parte e che sim_reset() non tocca. Due
+# conseguenze: le corse non erano ripetibili nemmeno nello stesso processo,
+# e — piu' grave — l'accoppiamento CRN saltava proprio dove serve. Cambiando
+# intercept_rate cambia il numero di misure eseguite da Eve, quindi il flusso
+# globale viene consumato in modo diverso e l'esito di Bob alla stessa
+# posizione viene estratto da un punto diverso. La casualita' dell'esito di
+# Bob quando Eve ha misurato nella base sbagliata E' il QBER da
+# intercettazione: e' la grandezza su cui poggia tutto il progetto.
+#
+# Qui lo stato globale viene fissato dal flusso della POSIZIONE subito prima
+# di ogni misura, cosi' la stessa posizione pesca lo stesso valore in ogni
+# condizione. L'API va verificata sulla propria installazione: prova_crn.py
+# misura se l'accoppiamento regge davvero.
+ACCOPPIA_MISURE = True
+_SET_RS = getattr(ns, "set_random_state", None)
+
+
+def misura_accoppiata(q, i, seed, tag):
+    """Misura in base Z con esito accoppiato alla posizione."""
+    if ACCOPPIA_MISURE and _SET_RS is not None:
+        _SET_RS(seed=seme_derivato(seed, tag, i) % (2 ** 31 - 1))
+    m, _ = measure(q, observable=Z)
+    return int(m)
 
 
 def flips(pauli, basis):
@@ -171,8 +224,7 @@ class Eve(NodeProtocol):
             if intercepted:
                 if basis == 1:
                     operate(q, H)
-                m, _ = measure(q, observable=Z)
-                outcome = int(m)
+                outcome = misura_accoppiata(q, i, self.seed, "eve_meas")
                 q = create_qubits(1)[0]
                 q.idx = i
                 if outcome == 1:
@@ -202,8 +254,7 @@ class Bob(NodeProtocol):
 
             if self.bases[i] == 1:
                 operate(q, H)
-            m, _ = measure(q, observable=Z)
-            raw = int(m)
+            raw = misura_accoppiata(q, i, self.seed, "bob_meas")
 
             det_flip = stream(self.seed, "det", i).random_sample() < self.p_det
             self.results[i] = {"raw": raw,
@@ -253,9 +304,10 @@ def attribute(i, alice_bit, basis, eve, p1, p2, det_flip, bob_raw):
 # =====================================================================
 
 def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
-             verbose=True):
+             verbose=True, con_ricevute=False):
     ns.sim_reset()
-    rng = random.Random(seed)
+    if _SET_RS is not None:
+        _SET_RS(seed=int(seed))   # ripetibilita' di base, indipendente dall'accoppiamento
 
     alice_n = Node("Alice", port_names=["qout"])
     eve_n = Node("Eve", port_names=["qin", "qout"])
@@ -281,9 +333,16 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
     eve_n.ports["qout"].connect(ch2.ports["send"])
     bob_n.ports["qin"].connect(ch2.ports["recv"])
 
-    bits = [rng.randint(0, 1) for _ in range(num_bits)]
-    a_bases = [rng.randint(0, 1) for _ in range(num_bits)]
-    b_bases = [rng.randint(0, 1) for _ in range(num_bits)]
+    # Un flusso per ruolo. Prima bit e basi venivano estratti in sequenza da
+    # un unico random.Random(seed): cambiare num_bits cambiava anche le basi,
+    # stesso difetto della curva rispetto a n nel pacchetto QGAN. Con flussi
+    # separati num_bits tronca la stessa sequenza invece di spostarla.
+    bits    = np.random.RandomState(seme_derivato(seed, "bits", 0)
+                                    ).randint(0, 2, num_bits).tolist()
+    a_bases = np.random.RandomState(seme_derivato(seed, "a_bases", 0)
+                                    ).randint(0, 2, num_bits).tolist()
+    b_bases = np.random.RandomState(seme_derivato(seed, "b_bases", 0)
+                                    ).randint(0, 2, num_bits).tolist()
 
     eve_log, results = {}, {}
     Bob(bob_n, b_bases, results, seed, P_DETECTOR_ERR).start()
@@ -309,32 +368,92 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
             "det_flip": results[i]["det_flip"], **att,
         })
 
+    # ---- coerenza fra errore analitico e osservato ----
+    # Sulle posizioni setacciate e NON intercettate la catena
+    # Alice -> P1 -> P2 -> Bob -> rivelatore e' deterministica dati i Pauli e
+    # det_flip: err_full e l'errore osservato devono coincidere posizione per
+    # posizione, senza eccezioni. Una discordanza significa che entra nella
+    # catena qualcosa di non modellato — ed e' il controllo che avrebbe fatto
+    # emergere subito la casualita' non controllata delle misure.
+    #
+    # Copre anche un caso che non si vede: depol.get(i) restituisce None sia
+    # quando il Pauli applicato e' l'identita', sia quando il modello non ha
+    # registrato nulla per quella posizione. flips(None, basis) da' False in
+    # entrambi i casi, quindi un log mancante verrebbe trattato in silenzio
+    # come "nessun errore".
+    puliti = [r for r in records if not r["eve_intercepted"]]
+    n_disc = sum(1 for r in puliti
+                 if r["error"] != (r["alice_bit"] != r["bob_bit"]))
+
     qber = sum(r["error"] for r in records) / len(records) if records else float("nan")
     stats = {"intercept_rate": intercept_rate, "n_sifted": len(records),
              "qber": qber,
-             "loss_rate": 1 - len(results) / num_bits}
+             "loss_rate": 1 - len(results) / num_bits,
+             "n_non_intercettati": len(puliti),
+             "discordanze": n_disc}
 
     if verbose:
         print(f"\n--- r = {intercept_rate:.2f} ---")
         print(f"setacciati : {len(records)}   perdita {stats['loss_rate']:.1%}")
         print(f"QBER       : {qber:.2%}")
+        print(f"coerenza   : {n_disc} discordanze su {len(puliti)} "
+              f"posizioni non intercettate")
         for k in ("cf_canale", "cf_eve", "cf_rivelatore"):
             v = sum(r[k] for r in records) / len(records)
             print(f"{k:14s}: {v:.2%}")
 
+    if con_ricevute:
+        return stats, records, set(results)
     return stats, records
 
-
-import numpy as np
 
 SUBBLOCKS = 4  # sotto-blocchi per il calcolo di qber_stability
 
 
-def windows(records, size=200, subblocks=SUBBLOCKS):
+def windows(records, size=200, subblocks=SUBBLOCKS, *, ricevute):
     """Aggrega i record per posizione in finestre temporali.
 
     Ogni finestra e' una riga del dataset: feature osservabili piu'
     frazioni causali (il target di O3).
+
+    `ricevute` e' l'insieme degli indici di posizione arrivati a Bob, cioe'
+    le chiavi di `results` in run_bb84. Serve a calcolare sift_rate e
+    loss_rate PER FINESTRA.
+
+    PERCHE' E' CAMBIATA LA FIRMA. Prima questa funzione non emetteva
+    sift_rate ne' loss_rate: venivano aggiunte a valle da generate_dataset.py
+    pescandole da `stats`, dove loss_rate e' `1 - len(results)/num_bits`,
+    uno SCALARE PER CORSA replicato identico su tutte le finestre di quella
+    corsa. Nella griglia da 94.200 finestre entrambe hanno esattamente un
+    valore distinto per cella, su tutte e 600 le celle.
+    Conseguenze: due qubit su cinque modellavano costanti gia' interamente
+    determinate da `c`; la disparita' di dispersione fra osservabili
+    risultava 47x quando fra quelle che variano davvero e' 1,22x, e su quel
+    47x poggiava la scelta dei raggi per feature; e in modalita'
+    autoregressiva due delle cinque componenti di w_{t-1} erano costanti
+    lungo la traccia, quindi ripetevano la condizione invece di portare
+    informazione temporale.
+
+    DEFINIZIONE. La finestra k copre le posizioni grezze
+    (limite[k-1], limite[k]], dove limite[k] e' l'indice dell'ultimo record
+    setacciato della finestra e limite[-1] = -1. Le finestre tassellano
+    quindi [0, ultima_setacciata] senza buchi e senza sovrapposizioni.
+
+        sift_rate = size / n_grezze
+        loss_rate = 1 - n_ricevute / n_grezze
+
+    Corrisponde alle definizioni per corsa: min e max di sift_rate nella
+    griglia, 0,078 e 0,400, sono 0,5*(1-perdita) a 40 km e a 5 km.
+
+    CORRELAZIONE FRA LE DUE. sift_rate e loss_rate sono fortemente
+    anticorrelate, ~-0,5 misurato: e' fisica, non un artefatto della
+    definizione di finestra. Le posizioni setacciate sono un sottoinsieme
+    delle ricevute, quindi sift_rate ~ 0,5*(1-loss_rate) piu' il rumore
+    binomiale della coincidenza di base. Verificato confrontando questa
+    definizione con l'alternativa a span grezzo fisso su 626 finestre: -0,480
+    contro -0,508, cioe' la stessa. La definizione a conteggio fisso di
+    setacciate non aggiunge correlazione spuria e resta quella adottata.
+    `n_grezze` viene comunque emesso, come diagnostica.
 
     qber_stability: la finestra e' divisa in `subblocks` blocchi contigui
     di uguale lunghezza; si calcola il QBER di ciascuno e se ne prende la
@@ -346,10 +465,21 @@ def windows(records, size=200, subblocks=SUBBLOCKS):
     finestra da 200 posizioni ci si attendono circa 3 errori distribuiti
     su 4 blocchi. Il comportamento va verificato e riportato.
     """
+    ric = np.asarray(sorted(ricevute), dtype=np.int64)
     out = []
+    limite_prec = -1
     for s in range(0, len(records) - size + 1, size):
         w = records[s:s + size]
         n = len(w)
+
+        # --- copertura grezza della finestra ---
+        limite = int(w[-1]["index"])
+        n_grezze = limite - limite_prec
+        n_ricevute = int(np.searchsorted(ric, limite, side="right")
+                         - np.searchsorted(ric, limite_prec, side="right"))
+        limite_prec = limite
+        sift_rate = n / n_grezze
+        loss_rate = 1.0 - n_ricevute / n_grezze
 
         errors = [r["error"] for r in w]
         qber = sum(errors) / n
@@ -382,6 +512,9 @@ def windows(records, size=200, subblocks=SUBBLOCKS):
             "basis_asymmetry": abs(qber_rect - qber_diag),  # candidata A
             "qber_stability": qber_stability,  # candidata B
             "n_subblocks": len(sub_qber),
+            "sift_rate": sift_rate,
+            "loss_rate": loss_rate,
+            "n_grezze": n_grezze,  # per misurare la correlazione indotta
             # ---- controfattuali e target ----
             **{f"qber_{k}": v for k, v in cf.items()},
             **{f"f_{k.split('_')[1]}": (v / tot if tot > 0 else 0.0)
@@ -394,7 +527,7 @@ def sanity_check():
     base = DEPOLAR_TOTAL / 2 + P_DETECTOR_ERR
     print(f"QBER di base atteso ~{base:.2%}\n")
     print(f"{'r':>6} {'QBER':>8} {'atteso':>8} {'canale':>8} "
-          f"{'eve':>8} {'rivel.':>8}")
+          f"{'eve':>8} {'rivel.':>8} {'discord.':>12}")
     for r in [0.0, 0.25, 0.5, 1.0]:
         s, rec = run_bb84(intercept_rate=r, verbose=False)
         # composizione XOR delle cause, non somma
@@ -403,13 +536,20 @@ def sanity_check():
               for k in ("cf_canale", "cf_eve", "cf_rivelatore")}
         print(f"{r:>6.2f} {s['qber']:>8.2%} {att:>8.2%} "
               f"{cf['cf_canale']:>8.2%} {cf['cf_eve']:>8.2%} "
-              f"{cf['cf_rivelatore']:>8.2%}")
+              f"{cf['cf_rivelatore']:>8.2%} "
+              f"{s['discordanze']:>5d}/{s['n_non_intercettati']:<6d}")
+    print("\nGuarda per prima la riga r = 0.00: li' Eve non intercetta mai, "
+          "quindi il\ncontrollo copre il 100% delle posizioni setacciate ed "
+          "e' il caso con piu'\npotere. Discordanze diverse da zero gia' a "
+          "r = 0.00 indicano un problema a\nmonte (misura di Bob o modello "
+          "del canale); discordanze che crescono con r\nindicano le misure "
+          "di Eve.")
 
 
 if __name__ == "__main__":
     sanity_check()
-    _, rec = run_bb84(intercept_rate=0.5, verbose=True)
-    w = windows(rec)
+    _, rec, ricevute = run_bb84(intercept_rate=0.5, verbose=True, con_ricevute=True)
+    w = windows(rec, ricevute=ricevute)
     print(f"\nfinestre generate: {len(w)}")
     print("prima finestra:", {k: round(v, 4) if isinstance(v, float) else v
                               for k, v in w[0].items()})

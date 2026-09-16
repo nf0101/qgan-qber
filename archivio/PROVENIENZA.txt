@@ -1,0 +1,3 @@
+Griglie generate PRIMA della correzione CRN: misure non accoppiate
+(87/299 divergenze), sift_rate e loss_rate scalari per corsa replicati.
+Conservate come documentazione dei risultati gia' riportati, non riusabili.

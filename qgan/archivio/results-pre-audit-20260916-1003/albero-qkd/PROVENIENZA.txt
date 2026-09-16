@@ -1,0 +1,8 @@
+Questo file viene da qgan-qber/results/, cioe' dall'albero NetSquid,
+non dall'albero del pacchetto QGAN. E' del 3 settembre 2026, ha uno schema
+precedente al blocco 'conflitto' ed e' stato prodotto prima che il pacchetto
+si spostasse in qgan-qber/qgan/. Celle escluse seme 0: [38, 26, 25, 41], che
+corrisponde a PER_CELL=32 con il difetto 3 ancora presente.
+
+Gli altri file rimasti in qgan-qber/results/ (attributor_baseline.json,
+baseline.csv, baseline_best.json) appartengono all'albero QKD e restano li'.
