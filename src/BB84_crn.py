@@ -207,6 +207,17 @@ def profilo_deriva(seed, tag="deriva_depol", phi=0.97, sigma=0.25,
     return p
 
 
+def profilo_prodotto(*profili):
+    """Composizione di profili: il moltiplicatore e' il prodotto."""
+    def p(i, num_bits):
+        v = 1.0
+        for f in profili:
+            v *= f(i, num_bits)
+        return v
+    p.nome = " x ".join(getattr(f, "nome", "?") for f in profili)
+    return p
+
+
 def flips(pauli, basis):
     """Il Pauli inverte l'esito della misura nella base data?
 

@@ -46,9 +46,21 @@ SEEDS = [1, 2, 3, 4, 5]
 #   intermittente   Eve che si accende e spegne con periodo piu' corto della
 #                   traccia: ogni traccia contiene una transizione.
 #   entrambi        i due insieme.
-PROFILI = ["deriva", "intermittente", "entrambi"]
-NS_RATES = [0.25, 0.50, 1.0]
-NS_LENGTHS = [10.0, 20.0]
+# La deriva sulla DEPOLARIZZAZIONE e' satura: quel parametro contribuisce al
+# QBER con dep/2 <= 0,0225, mentre il rumore binomiale di stima su una
+# finestra da 200 posizioni vale ~0,025. Misurato sulla prima griglia non
+# stazionaria: autocorrelazione del QBER +0,036, e un modello analitico la
+# ferma a +0,11 anche portando sigma a 1,0. Non e' un parametro sbagliato,
+# e' il segnale che non puo' superare il proprio valore medio.
+#
+# La deriva sul TASSO DI EVE non ha quel limite: Eve contribuisce r/4, che a
+# r=0,5 vale 0,125. Attesa +0,47 a r=0,25 e +0,66 a r=0,50 con sigma 0,5.
+PROFILI = ["deriva_eve", "intermittente", "entrambi"]
+SIGMA_DERIVA_EVE = 0.5
+# Tassi nominali bassi: con m fino a 2,0 il prodotto r*m resta sotto 1 e il
+# segnale non viene tagliato dal limite superiore.
+NS_RATES = [0.25, 0.50]
+NS_LENGTHS = [10.0, 20.0]  # 3 profili x 2 tassi x 2 L x 2 dep x 5 semi = 120
 NS_DEPOLS = [0.02, 0.045]
 OUT_NS = Path(__file__).resolve().parent.parent / "data" / "qber_grid_ns.csv"
 
@@ -58,13 +70,18 @@ def costruisci_profili(nome, seed):
     cost = m.profilo_costante()
     if nome == "costante":
         return cost, cost
-    if nome == "deriva":
+    if nome == "deriva":                       # storico: deriva su depolar
         return cost, m.profilo_deriva(seed)
-    if nome == "intermittente":
+    if nome == "deriva_eve":                   # memoria temporale VERA
+        return m.profilo_deriva(seed, tag="deriva_eve",
+                                sigma=SIGMA_DERIVA_EVE), cost
+    if nome == "intermittente":                # cambio di regime
         return m.profilo_intermittente(fase=m.fase_da_seme(seed)), cost
-    if nome == "entrambi":
-        return (m.profilo_intermittente(fase=m.fase_da_seme(seed)),
-                m.profilo_deriva(seed))
+    if nome == "entrambi":                     # regime E dinamica, su Eve
+        return m.profilo_prodotto(
+            m.profilo_intermittente(fase=m.fase_da_seme(seed)),
+            m.profilo_deriva(seed, tag="deriva_eve",
+                             sigma=SIGMA_DERIVA_EVE)), cost
     raise ValueError(f"profilo non riconosciuto: {nome!r}")
 
 
