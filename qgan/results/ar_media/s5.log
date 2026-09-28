@@ -1,0 +1,9 @@
+configurazione 9525cdd26480   codice e0d5c9e+modificato
+[seme 5]
+  finestre   teacher forcing 0.00564   generazione libera 0.00846   deriva x1.5
+  MMD per passo t=0..15: 0.021 0.005 0.001 -0.002 -0.005 -0.003 -0.005 -0.007 -0.007 -0.008 -0.008 -0.006 -0.007 -0.005 -0.005 -0.009
+  autocorr. lag 1, tre letture:
+    residua (livello noto)  reale +0.747  sintetica +0.605  teorica +0.750  MAE 0.250
+    intra (media empirica)  reale +0.609  sintetica +0.095  baseline senza memoria -0.069
+    aggregata (storica)     reale +0.934  sintetica +0.848  baseline senza memoria +0.814
+  variabilita' nel tempo  reale 0.03856   sintetica 0.03652

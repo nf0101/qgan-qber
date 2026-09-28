@@ -1,0 +1,8 @@
+configurazione e0daaf3610a6   codice e0d5c9e+modificato
+[seme 16]
+  controllo: MMD sul training  condizionato 0.9580 -> 0.0077   incondizionato 0.2597 -> 0.0210
+  risposta r=+0.997   MMD celle escluse: cond 0.0809  incond 0.2618  guadagno +0.1809
+  posizione: MAE cond 0.0328  banale 0.0551  SKILL +0.405  (incond -0.453)
+  dispersione: vera 0.0485  generata 0.0372
+  per osservabile:  qber 0.0441/0.0534   qber_rect 0.0319/0.0711   qber_diag 0.0374/0.0714   sift_rate 0.0171/0.0358   loss_rate 0.0555/0.0208
+  conflitto:  theta_init 0.10  z<=[0.676 1.1   0.942 0.512 1.033] (incond 3.142)  c/z 0.377->13.474 (checkpoint, passo 3725)  Var(g) min 2.35e-04  dispersione gen 0.1587 (reale 0.1708)

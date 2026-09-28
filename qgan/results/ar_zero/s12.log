@@ -1,0 +1,9 @@
+configurazione 2d4105a6bd51   codice e0d5c9e+modificato
+[seme 12]
+  finestre   teacher forcing 0.00404   generazione libera 0.01632   deriva x4.0
+  MMD per passo t=0..15: 0.078 0.037 0.011 0.009 0.003 0.000 0.006 0.002 0.004 0.005 0.007 0.010 0.012 0.009 0.003 0.004
+  autocorr. lag 1, tre letture:
+    residua (livello noto)  reale +0.742  sintetica +0.743  teorica +0.750  MAE 0.299
+    intra (media empirica)  reale +0.588  sintetica +0.342  baseline senza memoria -0.065
+    aggregata (storica)     reale +0.935  sintetica +0.873  baseline senza memoria +0.826
+  variabilita' nel tempo  reale 0.03801   sintetica 0.04633
