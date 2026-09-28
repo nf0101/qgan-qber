@@ -66,6 +66,8 @@ class QGAN:
         seed: int = 0,
         verbose: int = 1,
         max_parallel_experiments: int = 0,
+        backend: str = "aer",
+        cond_schema: str = "avanti",
     ) -> None:
         self.n_features = int(n_features)
         self.d_c = int(d_c)
@@ -100,12 +102,17 @@ class QGAN:
             reps=self.reps,
             d_c=self.d_c,
             max_parallel_experiments=max_parallel_experiments,
+            backend=backend,
+            cond_schema=cond_schema,
         )
         self.latent_dim = self.gen.latent_dim
-        # Scalare o vettore di 5 componenti, un raggio per qubit. La
-        # dispersione condizionale richiesta puo' variare di un fattore 47 fra
-        # osservabili (dominio QKD: qber_diag 0,071 contro loss_rate 0,0015),
-        # e un raggio unico non puo' soddisfarle tutte.
+        # Scalare o vettore di 5 componenti, un raggio per qubit. Sulla
+        # griglia QKD corretta la dispersione condizionale varia di un
+        # fattore 3 fra osservabili (qber_diag 0,071 contro loss_rate 0,021).
+        # Il fattore 47 dichiarato in precedenza non era fisico: sift_rate e
+        # loss_rate erano scalari per corsa replicati sulle finestre. Se il
+        # raggio per feature serva ancora lo decide il confronto end-to-end,
+        # non questa misura.
         lh = np.atleast_1d(np.asarray(self._latent_hi_raw, dtype=float))
         if lh.size == 1:
             lh = np.repeat(lh, self.latent_dim)

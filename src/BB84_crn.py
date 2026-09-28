@@ -66,6 +66,7 @@ TAG_ID = {
     "loss_s1": 1, "loss_s2": 2, "depol_s1": 3, "depol_s2": 4,
     "eve": 5, "det": 6, "eve_meas": 7, "bob_meas": 8,
     "bits": 9, "a_bases": 10, "b_bases": 11,
+    "deriva_eve": 12, "deriva_depol": 13,
 }
 
 
@@ -115,6 +116,97 @@ def misura_accoppiata(q, i, seed, tag):
     return int(m)
 
 
+# =====================================================================
+# PROFILI TEMPORALI
+#
+# Le condizioni fisiche possono variare lungo la traccia. Un profilo e' un
+# moltiplicatore in funzione della posizione: p(i, num_bits) -> float, con
+# valore nominale moltiplicato per p.
+#
+# `costante` restituisce 1.0 ovunque ed e' il DEFAULT: con tutti i profili
+# costanti il modulo si comporta esattamente come prima, stessa sequenza di
+# estrazioni dai flussi per posizione. Il caso stazionario non e' una
+# modalita' alternativa, e' un caso particolare — e c'e' una regressione che
+# lo verifica contro la griglia gia' generata.
+#
+# ATTENZIONE alla differenza fra i due profili non costanti, perche'
+# producono fenomeni diversi:
+#
+#   gradino  un PUNTO DI CAMBIAMENTO. Le finestre restano scambiabili dentro
+#            ciascun regime: l'autocorrelazione che ne risulta e' differenza
+#            di livello fra i due tratti, non memoria temporale. Serve a O3,
+#            dove l'attribuzione diventa dipendente dal tempo.
+#   deriva   un AR(1) lento sul moltiplicatore, quindi AUTOCORRELAZIONE VERA
+#            fra finestre vicine. E' il profilo che da' a §6 qualcosa che
+#            `w_{t-1}` puo' effettivamente predire.
+# =====================================================================
+
+def profilo_costante():
+    """Moltiplicatore 1.0 ovunque: comportamento stazionario."""
+    def p(i, num_bits):
+        return 1.0
+    p.nome = "costante"
+    return p
+
+
+def profilo_gradino(frazione=0.5, prima=0.0, dopo=1.0):
+    """Punto di cambiamento a `frazione` della traccia."""
+    def p(i, num_bits):
+        return prima if i < frazione * num_bits else dopo
+    p.nome = f"gradino@{frazione:g}:{prima:g}->{dopo:g}"
+    return p
+
+
+def fase_da_seme(seed):
+    """Sfasamento in [0,1) del profilo intermittente, per cella."""
+    return float(stream(seed, "deriva_eve", 1).random_sample())
+
+
+def profilo_intermittente(periodo=0.125, duty=0.5, fase=0.0,
+                          prima=0.0, dopo=1.0):
+    """Onda quadra: Eve che si accende e si spegne lungo la traccia.
+
+    `periodo` e' in frazione della corsa. Con circa 157 finestre per cella,
+    0,125 corrisponde a un ciclo di ~20 finestre e a un blocco acceso di ~10:
+    poiche' e' piu' corto della traccia di T=16 finestre, OGNI traccia
+    contiene almeno una transizione. Un gradino unico a meta' corsa non lo
+    garantirebbe — la transizione cadrebbe in una traccia su dieci.
+
+    Rispetto al gradino e' anche piu' realistico per O3: l'attributore deve
+    seguire un intercettatore che va e viene, non un cambio di regime unico.
+    """
+    def p(i, num_bits):
+        u = ((i / max(num_bits, 1)) / periodo + fase) % 1.0
+        return dopo if u < duty else prima
+    p.nome = f"intermittente(T={periodo:g},duty={duty:g},fase={fase:.3f})"
+    return p
+
+
+def profilo_deriva(seed, tag="deriva_depol", phi=0.97, sigma=0.25,
+                   blocchi=400, minimo=0.05, massimo=2.0):
+    """AR(1) lento attorno a 1, costante entro blocco.
+
+    Il moltiplicatore e' precalcolato da un flusso proprio, quindi e'
+    deterministico e accoppiato fra condizioni come tutto il resto: due corse
+    con parametri nominali diversi e lo stesso seme vedono la STESSA deriva.
+
+    `blocchi` fissa la granularita' temporale: con 400 blocchi e finestre da
+    circa 630 posizioni grezze su 100.000 bit, una finestra copre piu' blocchi
+    e la deriva e' liscia alla scala della finestra.
+    """
+    rng = stream(seed, tag, 0)
+    x = np.zeros(blocchi)
+    innov = sigma * np.sqrt(1 - phi ** 2)
+    for t in range(1, blocchi):
+        x[t] = phi * x[t - 1] + rng.normal(0.0, innov)
+    m = np.clip(1.0 + x, minimo, massimo)
+
+    def p(i, num_bits):
+        return float(m[min(int(i * blocchi / max(num_bits, 1)), blocchi - 1)])
+    p.nome = f"deriva(phi={phi:g},sigma={sigma:g})"
+    return p
+
+
 def flips(pauli, basis):
     """Il Pauli inverte l'esito della misura nella base data?
 
@@ -156,17 +248,23 @@ class CRNDepolar(QuantumErrorModel):
     (1-3p, p, p, p) su (I, X, Y, Z). Registra quale Pauli e' stato applicato.
     """
 
-    def __init__(self, prob, seed=SEED, tag="depol", log=None):
+    def __init__(self, prob, seed=SEED, tag="depol", log=None,
+                 profilo=None, num_bits=None):
         super().__init__()
         self.prob, self._seed, self._tag = prob, seed, tag
         self.log = log if log is not None else {}
+        self.profilo = profilo if profilo is not None else profilo_costante()
+        self.num_bits = num_bits
+        self.log_prob = {}          # probabilita' effettiva per posizione
 
     def error_operation(self, qubits, delta_time=0, **kwargs):
-        p = 0.25 * self.prob
         for q in qubits:
             if q is None:
                 continue
             i = getattr(q, "idx", None)
+            prob_i = self.prob * self.profilo(i, self.num_bits)
+            self.log_prob[i] = prob_i
+            p = 0.25 * prob_i
             r = stream(self._seed, self._tag, i).random_sample()
             if r < p:
                 op, name = X, "X"
@@ -203,9 +301,12 @@ class Alice(NodeProtocol):
 
 
 class Eve(NodeProtocol):
-    def __init__(self, node, intercept_rate, seed, log):
+    def __init__(self, node, intercept_rate, seed, log,
+                 profilo=None, num_bits=None):
         super().__init__(node)
         self.rate, self.seed, self.log = intercept_rate, seed, log
+        self.profilo = profilo if profilo is not None else profilo_costante()
+        self.num_bits = num_bits
 
     def run(self):
         while True:
@@ -217,7 +318,12 @@ class Eve(NodeProtocol):
             i = msg.meta.get("header")
 
             rng = stream(self.seed, "eve", i)
-            intercepted = rng.random_sample() < self.rate
+            # Il tasso puo' variare lungo la traccia; il FLUSSO no. Con
+            # profilo costante l'estrazione e' identica a prima, e la
+            # nidificazione fra tassi diversi resta: cio' che rende possibile
+            # la prova di accoppiamento di prova_crn.py.
+            rate_i = self.rate * self.profilo(i, self.num_bits)
+            intercepted = rng.random_sample() < rate_i
             basis = int(rng.random_sample() < 0.5)   # estratto sempre
             outcome = None
 
@@ -232,8 +338,8 @@ class Eve(NodeProtocol):
                 if basis == 1:
                     operate(q, H)
 
-            self.log[i] = {"intercepted": intercepted,
-                           "basis": basis, "outcome": outcome}
+            self.log[i] = {"intercepted": intercepted, "basis": basis,
+                           "outcome": outcome, "rate": rate_i}
             self.node.ports["qout"].tx_output(Message(q, header=i))
 
 
@@ -304,7 +410,8 @@ def attribute(i, alice_bit, basis, eve, p1, p2, det_flip, bob_raw):
 # =====================================================================
 
 def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
-             verbose=True, con_ricevute=False):
+             verbose=True, con_ricevute=False,
+             profilo_eve=None, profilo_depol=None):
     ns.sim_reset()
     if _SET_RS is not None:
         _SET_RS(seed=int(seed))   # ripetibilita' di base, indipendente dall'accoppiamento
@@ -313,16 +420,23 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
     eve_n = Node("Eve", port_names=["qin", "qout"])
     bob_n = Node("Bob", port_names=["qin"])
 
+    profilo_eve = profilo_eve if profilo_eve is not None else profilo_costante()
+    profilo_depol = (profilo_depol if profilo_depol is not None
+                     else profilo_costante())
+
     depol1, depol2 = {}, {}
+    modelli_depol = []
 
     def channel(name, length, dlog, tag):
+        md = CRNDepolar(DEPOLAR_SEG, seed=seed, tag=f"depol_{tag}", log=dlog,
+                        profilo=profilo_depol, num_bits=num_bits)
+        modelli_depol.append(md)
         return QuantumChannel(name, length=length, models={
             "delay_model": FibreDelayModel(c=2e5),
             "quantum_loss_model": CRNFibreLoss(
                 p_loss_init=0.0, p_loss_length=P_LOSS_LENGTH,
                 seed=seed, tag=f"loss_{tag}"),
-            "quantum_noise_model": CRNDepolar(
-                DEPOLAR_SEG, seed=seed, tag=f"depol_{tag}", log=dlog),
+            "quantum_noise_model": md,
         })
 
     ch1 = channel("ch_AE", L1, depol1, "s1")
@@ -346,7 +460,8 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
 
     eve_log, results = {}, {}
     Bob(bob_n, b_bases, results, seed, P_DETECTOR_ERR).start()
-    Eve(eve_n, intercept_rate, seed, eve_log).start()
+    Eve(eve_n, intercept_rate, seed, eve_log,
+        profilo=profilo_eve, num_bits=num_bits).start()
     Alice(alice_n, bits, a_bases).start()
     ns.sim_run()
 
@@ -361,6 +476,11 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
                         depol1.get(i), depol2.get(i),
                         results[i]["det_flip"], results[i]["raw"])
         records.append({
+            # condizioni EFFETTIVE alla posizione: non sono osservabili da un
+            # operatore, stanno con i target causali
+            "rate_eff": e.get("rate", intercept_rate),
+            "depol_eff": sum(md.log_prob.get(i, DEPOLAR_SEG)
+                             for md in modelli_depol),
             "index": i, "t": results[i]["t"], "basis": a_bases[i],
             "alice_bit": bits[i], "bob_bit": results[i]["bit"],
             "eve_intercepted": e["intercepted"],
@@ -387,6 +507,8 @@ def run_bb84(intercept_rate=INTERCEPT_RATE, num_bits=NUM_BITS, seed=SEED,
 
     qber = sum(r["error"] for r in records) / len(records) if records else float("nan")
     stats = {"intercept_rate": intercept_rate, "n_sifted": len(records),
+             "profilo_eve": getattr(profilo_eve, "nome", "?"),
+             "profilo_depol": getattr(profilo_depol, "nome", "?"),
              "qber": qber,
              "loss_rate": 1 - len(results) / num_bits,
              "n_non_intercettati": len(puliti),
@@ -515,6 +637,9 @@ def windows(records, size=200, subblocks=SUBBLOCKS, *, ricevute):
             "sift_rate": sift_rate,
             "loss_rate": loss_rate,
             "n_grezze": n_grezze,  # per misurare la correlazione indotta
+            # ---- condizioni effettive nella finestra (target, non osservabili) ----
+            "rate_eff": sum(r.get("rate_eff", 0.0) for r in w) / n,
+            "depol_eff": sum(r.get("depol_eff", 0.0) for r in w) / n,
             # ---- controfattuali e target ----
             **{f"qber_{k}": v for k, v in cf.items()},
             **{f"f_{k.split('_')[1]}": (v / tot if tot > 0 else 0.0)

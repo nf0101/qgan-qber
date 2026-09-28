@@ -29,7 +29,54 @@ from qiskit_aer import AerSimulator
 _SHIFT = np.pi / 2
 
 
-def cond_index_map(d_c: int, n_qubits: int, n_layers: int) -> list[list[int]]:
+# ---------------------------------------------------------------------------
+# Simulatore denso vettorizzato sull'asse del batch
+#
+# A 5 qubit lo stato e' un vettore di 32 complessi e quasi tutto il tempo di
+# Aer e' overhead per circuito: preparazione, binding, raccolta dei risultati.
+# Qui gli N circuiti di una chiamata diventano UNA sola sequenza di operazioni
+# NumPy su un tensore (N, 2, 2, 2, 2, 2): ogni porta e' applicata a tutti i
+# circuiti del batch insieme, con angoli diversi per ciascuno.
+#
+# Convenzione di Qiskit, little-endian: il qubit q e' il bit q dell'indice
+# della base. Con il tensore in ordine C l'ULTIMO asse e' il bit meno
+# significativo, quindi il qubit q sta sull'asse n - q (l'asse 0 e' il batch).
+# Le probabilita' non dipendono dalla fase globale, quindi le definizioni di
+# RY, RZ e CX qui sotto riproducono esattamente quelle di Qiskit.
+# ---------------------------------------------------------------------------
+def _ry_denso(psi, theta, q, n):
+    """RY(theta) sul qubit q, con un angolo per circuito del batch."""
+    ax = n - q
+    c = np.cos(0.5 * theta).reshape((-1,) + (1,) * (n - 1))
+    s = np.sin(0.5 * theta).reshape((-1,) + (1,) * (n - 1))
+    a0 = np.take(psi, 0, axis=ax)
+    a1 = np.take(psi, 1, axis=ax)
+    return np.stack([c * a0 - s * a1, s * a0 + c * a1], axis=ax)
+
+
+def _rz_denso(psi, theta, q, n):
+    """RZ(theta) = diag(e^{-i theta/2}, e^{+i theta/2}) sul qubit q."""
+    ax = n - q
+    f = np.stack([np.exp(-0.5j * theta), np.exp(0.5j * theta)], axis=1)
+    forma = [len(theta)] + [1] * n
+    forma[ax] = 2
+    return psi * f.reshape(forma)
+
+
+def _cx_denso(psi, ctrl, tgt, n):
+    """CX(ctrl, tgt): scambia i due valori del bersaglio dove ctrl vale 1."""
+    axc, axt = n - ctrl, n - tgt
+    sel = [slice(None)] * (n + 1)
+    sel[axc] = 1
+    sel = tuple(sel)
+    ax_sub = axt if axt < axc else axt - 1   # il sottotensore perde l'asse axc
+    psi = psi.copy()
+    psi[sel] = np.flip(psi[sel], axis=ax_sub).copy()
+    return psi
+
+
+def cond_index_map(d_c: int, n_qubits: int, n_layers: int,
+                   schema: str = "avanti") -> list[list[int]]:
     """Indici di ``c`` letti da ciascuno strato di condizionamento.
 
     Per ``d_c <= n_qubits`` riproduce ESATTAMENTE la mappatura congelata da
@@ -53,11 +100,32 @@ def cond_index_map(d_c: int, n_qubits: int, n_layers: int) -> list[list[int]]:
     cioe' sulle prime due componenti del condizionamento statico, che sono
     quelle su cui RQ2 misura la risposta.
 
+    SCHEMA, solo per d_c > n_qubits. I due strati non sono equivalenti: il
+    primo precede l'intero ansatz, il secondo entra a meta'. Misurato con
+    input_sensitivity a d_c=8, le componenti del secondo strato pesano fino a
+    diciotto volte meno di quelle del primo.
+
+      avanti  strato 0 legge il primo blocco, strato 1 i successivi. Con
+              c_eff = concat(c_statico, w_precedente) e d_c=8 le ultime tre
+              osservabili della finestra precedente finiscono nello strato
+              debole.
+      coda    strato 0 legge gli ULTIMI n_qubits indici, cioe' l'intera
+              finestra precedente; gli strati seguenti ripartono da 0. Serve
+              a misurare quanto dell'attenuazione della memoria temporale
+              dipenda dall'asimmetria fra strati.
+
+    Lo schema non ha effetto per d_c <= n_qubits: li' la mappatura e' quella
+    congelata da §12 e resta identica, quindi nessun risultato gia' prodotto
+    dipende da questa scelta.
+
     Esempi
     ------
-    d_c=3, 5 qubit, 2 strati -> [[0,1,2,0,1], [0,1,2,0,1]]   (invariato)
-    d_c=8, 5 qubit, 2 strati -> [[0,1,2,3,4], [5,6,7,0,1]]   (copertura piena)
+    d_c=3, 5 qubit, 2 strati            -> [[0,1,2,0,1], [0,1,2,0,1]]
+    d_c=8, 5 qubit, 2 strati, avanti    -> [[0,1,2,3,4], [5,6,7,0,1]]
+    d_c=8, 5 qubit, 2 strati, coda      -> [[3,4,5,6,7], [0,1,2,3,4]]
     """
+    if schema not in ("avanti", "coda"):
+        raise ValueError("schema deve essere 'avanti' o 'coda'")
     if d_c <= 0:
         return [[] for _ in range(n_layers)]
     capienza = n_qubits * n_layers
@@ -71,8 +139,20 @@ def cond_index_map(d_c: int, n_qubits: int, n_layers: int) -> list[list[int]]:
     if d_c <= n_qubits:
         # ramo congelato: identico al comportamento precedente alla correzione
         return [[q % d_c for q in range(n_qubits)] for _ in range(n_layers)]
-    return [[(layer * n_qubits + q) % d_c for q in range(n_qubits)]
-            for layer in range(n_layers)]
+    if schema == "avanti":
+        mappa = [[(layer * n_qubits + q) % d_c for q in range(n_qubits)]
+                 for layer in range(n_layers)]
+    else:
+        mappa = ([[(d_c - n_qubits + q) % d_c for q in range(n_qubits)]]
+                 + [[(layer * n_qubits + q) % d_c for q in range(n_qubits)]
+                    for layer in range(n_layers - 1)])
+    coperte = set().union(*mappa)
+    if coperte != set(range(d_c)):
+        raise RuntimeError(
+            f"schema '{schema}' non copre tutte le componenti di c: "
+            f"mancano {sorted(set(range(d_c)) - coperte)}"
+        )
+    return mappa
 
 
 class QuantumGenerator:
@@ -107,7 +187,13 @@ class QuantumGenerator:
         cond_scale: float = np.pi,
         max_parallel_experiments: int = 0,
         max_circuits_per_call: int = 32_768,
+        backend: str = "aer",
+        cond_schema: str = "avanti",
     ) -> None:
+        self.cond_schema = str(cond_schema)
+        if backend not in ("aer", "denso"):
+            raise ValueError("backend deve essere 'aer' o 'denso'")
+        self.backend = backend
         if cond_layers not in (0, 1, 2) and d_c > 0:
             raise ValueError("cond_layers deve essere 0, 1 o 2")
         self.n_qubits = int(n_qubits)
@@ -124,7 +210,7 @@ class QuantumGenerator:
         self._th = ParameterVector("th", self.n_params)
         self._c = ParameterVector("c", self.d_c) if self.d_c > 0 else []
         self._cond_map = cond_index_map(
-            self.d_c, self.n_qubits, self.cond_layers
+            self.d_c, self.n_qubits, self.cond_layers, self.cond_schema
         )
 
         self.circuit = self._build()
@@ -241,6 +327,13 @@ class QuantumGenerator:
         step = self.max_circuits_per_call
         for lo in range(0, N, step):
             hi = min(lo + step, N)
+            if self.backend == "denso":
+                probs = self._probs_denso(
+                    TH[lo:hi], Z[lo:hi], None if C is None else C[lo:hi])
+                self.n_sim_calls += 1
+                self.n_circuit_evals += hi - lo
+                out[lo:hi] = probs @ self._mask.T
+                continue
             binds = {}
             for j, p in enumerate(self._th):
                 binds[p] = TH[lo:hi, j]
@@ -256,6 +349,47 @@ class QuantumGenerator:
             )
             out[lo:hi] = probs @ self._mask.T
         return out
+
+    def _probs_denso(self, TH, Z, C) -> np.ndarray:
+        """Probabilita' della base computazionale, shape (N, 2**n).
+
+        Riproduce porta per porta la sequenza di ``_build``: encoding RY(z),
+        primo strato di condizionamento, ansatz con il secondo strato a meta'.
+        Qualunque modifica a ``_build`` va riportata qui; ``tests`` confronta
+        i due backend su forward e jacobiana, ed e' la regressione che lo
+        garantisce.
+        """
+        N, n = TH.shape[0], self.n_qubits
+        psi = np.zeros((N, 2 ** n), dtype=np.complex128)
+        psi[:, 0] = 1.0
+        psi = psi.reshape((N,) + (2,) * n)
+
+        for i in range(n):
+            psi = _ry_denso(psi, Z[:, i], i, n)
+
+        def strato_cond(psi, layer):
+            for q, j in enumerate(self._cond_map[layer]):
+                psi = _rz_denso(psi, self.cond_scale * C[:, j], q, n)
+            return psi
+
+        if self.cond_layers >= 1:
+            psi = strato_cond(psi, 0)
+
+        mid = (self.reps + 1) // 2
+        k = 0
+        for r in range(self.reps + 1):
+            if r > 0:
+                for q in range(n - 1):
+                    psi = _cx_denso(psi, q, q + 1, n)
+            if r == mid and self.cond_layers >= 2:
+                psi = strato_cond(psi, 1)
+            for q in range(n):
+                psi = _ry_denso(psi, TH[:, k], q, n)
+                psi = _rz_denso(psi, TH[:, k + 1], q, n)
+                k += 2
+
+        psi = psi.reshape(N, 2 ** n)
+        return (psi.real ** 2 + psi.imag ** 2)
 
     def forward(
         self, theta: np.ndarray, Z: np.ndarray, C: np.ndarray | None = None
@@ -373,7 +507,9 @@ class QuantumGenerator:
             "d_c": self.d_c,
             "cond_layers": self.cond_layers,
             "cond_map": [list(m) for m in self._cond_map],
+            "cond_schema": self.cond_schema,
             "cond_scale": self.cond_scale,
+            "backend": self.backend,
             "n_params": self.n_params,
             "depth": self._tqc.depth(),
             "size": self._tqc.size(),

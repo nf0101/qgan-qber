@@ -135,6 +135,13 @@ for d_c in (1, 2, 3, 4, 5):
     check(f"d_c={d_c}: mappatura invariante (congelata da §12)",
           m == atteso_m, str(m))
 
+for sch in ("avanti", "coda"):
+    for d_c in (1, 3, 5):
+        check(f"d_c={d_c}, schema {sch}: mappatura congelata invariata",
+              cond_index_map(d_c, 5, 2, sch) == [[q % d_c for q in range(5)]] * 2)
+m8c = cond_index_map(8, 5, 2, "coda")
+check("d_c=8, schema coda: finestra precedente nel primo strato",
+      m8c == [[3, 4, 5, 6, 7], [0, 1, 2, 3, 4]], str(m8c))
 m8 = cond_index_map(8, 5, 2)
 check("d_c=8: tutte le componenti mappate",
       set(m8[0]) | set(m8[1]) == set(range(8)),
@@ -163,6 +170,30 @@ for d_c, cl in ((8, 1), (11, 2)):
         check(f"d_c={d_c} con {cl} strati: rifiutato", False, "nessun errore")
     except ValueError:
         check(f"d_c={d_c} con {cl} strati: rifiutato", True, "ValueError")
+
+# ------------------------------------------------------------------ #
+print("\n--- simulatore denso contro Aer ---")
+# Il backend denso riproduce porta per porta _build. Se una modifica al
+# circuito non viene riportata anche in _probs_denso, i due backend
+# divergono: e' questo controllo a garantirlo.
+rng = np.random.default_rng(2026)
+for d_c in (0, 3, 8):
+    ga = QuantumGenerator(d_c=d_c, backend="aer")
+    gd = QuantumGenerator(d_c=d_c, backend="denso")
+    th = rng.uniform(-np.pi, np.pi, 50)
+    Zt = rng.uniform(0, np.pi, (16, 5))
+    Ct = rng.random((16, d_c)) if d_c else None
+    dx = np.abs(ga.forward(th, Zt, Ct) - gd.forward(th, Zt, Ct)).max()
+    _, Ja = ga.forward_and_jacobian(th, Zt[:3], None if Ct is None else Ct[:3])
+    _, Jd = gd.forward_and_jacobian(th, Zt[:3], None if Ct is None else Ct[:3])
+    dj = np.abs(Ja - Jd).max()
+    check(f"d_c={d_c}: forward denso = Aer", dx < 1e-12, f"{dx:.1e}")
+    check(f"d_c={d_c}: jacobiana denso = Aer", dj < 1e-12, f"{dj:.1e}")
+g = QuantumGenerator(d_c=0, backend="denso")
+g.forward_and_jacobian(np.zeros(50), rng.uniform(0, np.pi, (32, 5)), None)
+check("denso: una sola chiamata per 3232 circuiti",
+      g.n_sim_calls == 1 and g.n_circuit_evals == 3232,
+      f"{g.n_sim_calls} chiamate, {g.n_circuit_evals} circuiti")
 
 # ------------------------------------------------------------------ #
 print("\n--- backprop del discriminatore ---")

@@ -37,7 +37,9 @@ import sys
 
 import numpy as np
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import corsa  # noqa: E402
 from qgan import QGAN, metrics  # noqa: E402
 from qgan.metrics import median_bandwidth  # noqa: E402
 
@@ -58,10 +60,17 @@ FROZEN = dict(
 
 AXES = [np.linspace(0.0, 1.0, 4)] * 3  # 4 x 4 x 4 = 64 celle
 PER_CELL = 32
-# Numero di finestre per cella usate in VALUTAZIONE, tenuto fisso al variare di
-# PER_CELL: altrimenti aumentando la numerosita' migliorerebbe anche la stima
-# del MAE sulle celle escluse, e i due effetti sarebbero confusi.
+# Finestre per cella usate in VALUTAZIONE. Era un LIMITE SUPERIORE applicato a
+# un sottoinsieme della griglia di addestramento: con --per-cella 8 il test
+# conteneva 8 finestre, non 32, e cambiava a ogni numerosita'. Ora e' il numero
+# esatto di finestre di un test generato a parte, identico in ogni condizione.
 PER_CELL_EVAL = 32
+
+# Semi di base dei flussi. SEED_TEST e' separato e non dipende dal seme della
+# corsa: il test di una cella e' una proprieta' della cella, non della corsa
+# che la valuta, ed e' cio' che rende confrontabili i punti della curva n.
+SEED_BASE = 3000
+SEED_TEST = 90210
 
 
 # Rumore condizionale per osservabile.
@@ -70,13 +79,19 @@ PER_CELL_EVAL = 32
 # la stessa dispersione. Non mette alla prova i raggi per feature, perche' un
 # raggio unico gia' le soddisfa tutte.
 #
-# `qkd` riproduce le dispersioni misurate sulla griglia reale (Appendice B.2),
-# con un fattore 47 fra la piu' alta e la piu' bassa, e l'ordinamento sui
-# qubit proposto in B.6. E' il bersaglio su cui i raggi per feature vanno
-# validati prima di applicarli ai dati veri.
+# `qkd` riproduce le dispersioni misurate sulla griglia reale, entro
+# configurazione e in unita' normalizzate min-max. E' il bersaglio su cui i
+# raggi per feature vanno validati prima di applicarli ai dati veri.
+#
+# VALORI AGGIORNATI al 16/09/2026, griglia rigenerata con codice 8d71755.
+# I valori precedenti, [0.05754, 0.07024, 0.07138, 0.00318, 0.00152],
+# venivano da una griglia in cui sift_rate e loss_rate erano scalari PER CORSA
+# replicati su tutte le finestre: le loro dispersioni erano varianza fra semi,
+# non variabilita' entro condizione, e davano un fattore 47 fra osservabili
+# che non era fisico. Sulla griglia corretta il fattore e' 3.
 # Base nell'ordine di SPEC §1.2, prima di qualunque permutazione sui qubit.
 NOMI_BASE = ["qber", "qber_rect", "qber_diag", "sift_rate", "loss_rate"]
-SIGMA_BASE = np.array([0.05754, 0.07024, 0.07138, 0.00318, 0.00152])
+SIGMA_BASE = np.array([0.05336, 0.07109, 0.07136, 0.03584, 0.02084])
 
 # Assegnazione delle osservabili ai qubit. La questione e' aperta: B.6 la
 # derivava da una misura all'inizializzazione, mentre il test end-to-end sul
@@ -93,7 +108,14 @@ ORDINI = {
     "b6": [3, 1, 0, 4, 2],
     "decrescente": [2, 1, 0, 3, 4],
 }
-ORDINE = "b6"
+# Ordine naturale: decisione corrente di B.6 e FASE2 §19. La variante "b6"
+# resta disponibile come opzione esplicita, non come default.
+ORDINE = "naturale"
+
+# Simulatore del circuito. 'denso' e' equivalente ad Aer entro 1e-15 su
+# forward e jacobiana (tests/test_correctness.py) ed e' cio' che rende
+# sostenibili i 15-20 semi decisi per l'inferenza sulla corsa come unita'.
+BACKEND = "denso"
 
 SIGMA = {"omogeneo": np.full(5, 0.02), "qkd": SIGMA_BASE}
 NOMI = {"omogeneo": ["f0", "f1", "f2", "f3", "f4"], "qkd": NOMI_BASE}
@@ -147,16 +169,23 @@ def interior_mask(cells):
 def run_seed(seed, steps, verbose=0, theta_init=0.1, latent_hi=np.pi,
              latent_hi_uncond=None, hidden=(32, 16), label_smoothing=0.0,
              weight_decay=0.0):
-    rng = np.random.default_rng(3000 + seed)
+    # Tre flussi per tre ruoli. Con un flusso unico lo stato consumato da
+    # build_grid dipendeva da PER_CELL, quindi cambiare la numerosita' del
+    # training spostava anche le celle escluse: per il seme 0 si passava da
+    # {22, 26, 42, 38} a {38, 26, 25, 41} solo aumentando --per-cella. La
+    # curva rispetto a n non isolava la numerosita'.
+    rng, rng_split, rng_diag = corsa.flussi(SEED_BASE, seed, 3)
     X, C, cid, cells = build_grid(rng)
     inner = interior_mask(cells)
     inner_idx = np.flatnonzero(inner)
 
-    # meta' delle celle interne escluse dall'addestramento
-    held = rng.choice(inner_idx, len(inner_idx) // 2, replace=False)
+    # meta' delle celle interne escluse dall'addestramento; dipende SOLO dal
+    # seme, non da quanto ha consumato la generazione della griglia
+    held = rng_split.choice(inner_idx, len(inner_idx) // 2, replace=False)
     train = ~np.isin(cid, held)
 
     kw = dict(FROZEN, max_steps=steps, seed=seed, verbose=verbose,
+              backend=BACKEND,
               theta_init=theta_init, latent_hi=latent_hi,
               hidden=tuple(hidden), label_smoothing=label_smoothing,
               d_weight_decay=weight_decay)
@@ -164,7 +193,7 @@ def run_seed(seed, steps, verbose=0, theta_init=0.1, latent_hi=np.pi,
     # Validazione: campione casuale su TUTTE le celle di addestramento. Le
     # prime righe della griglia appartengono a un solo angolo (c[0] = 0),
     # quindi uno slice iniziale monitorerebbe una fetta non rappresentativa.
-    vi = rng.choice(np.flatnonzero(train), 256, replace=False)
+    vi = rng_split.choice(np.flatnonzero(train), 256, replace=False)
 
     cond = QGAN(d_c=3, **kw)
     cond.fit(X[train], C[train], X_val=X[vi], c_val=C[vi])
@@ -185,8 +214,8 @@ def run_seed(seed, steps, verbose=0, theta_init=0.1, latent_hi=np.pi,
     lo = cond.sample(400, np.tile([0.1, 0.5, 0.1], (400, 1)))
     hi = cond.sample(400, np.tile([0.9, 0.5, 0.9], (400, 1)))
     d_gen = hi.mean(0) - lo.mean(0)
-    d_true = (cell_features(np.array([0.9, 0.5, 0.9]), rng, 2000).mean(0)
-              - cell_features(np.array([0.1, 0.5, 0.1]), rng, 2000).mean(0))
+    d_true = (cell_features(np.array([0.9, 0.5, 0.9]), rng_diag, 2000).mean(0)
+              - cell_features(np.array([0.1, 0.5, 0.1]), rng_diag, 2000).mean(0))
     risposta = float(np.corrcoef(d_gen, d_true)[0, 1])
 
     # --- 2 e 3. celle escluse, confronto appaiato ----------------------
@@ -202,10 +231,12 @@ def run_seed(seed, steps, verbose=0, theta_init=0.1, latent_hi=np.pi,
 
     per_cell = []
     for h in held:
-        Xh = X[cid == h]
-        if len(Xh) > PER_CELL_EVAL:
-            Xh = Xh[rng.choice(len(Xh), PER_CELL_EVAL, replace=False)]
         ch = cells[h]
+        # Test generato a parte, da un flusso proprio della cella: sempre
+        # PER_CELL_EVAL finestre, identiche per ogni valore di --per-cella e
+        # per ogni seme che escluda questa cella. E' la condizione perche' i
+        # punti della curva rispetto a n siano confrontabili fra loro.
+        Xh = cell_features(ch, corsa.flusso_fisso(SEED_TEST, h), PER_CELL_EVAL)
         gc = cond.sample(len(Xh), np.tile(ch, (len(Xh), 1)))
         gu = uncond.sample(len(Xh))
         # Errore di posizione. Non soffre dell'asimmetria della MMD contro una
@@ -239,17 +270,29 @@ def run_seed(seed, steps, verbose=0, theta_init=0.1, latent_hi=np.pi,
     # con l'intera griglia di addestramento (30.720 righe) sarebbero 7,5 GB
     # per processo. Il controllo non ha bisogno di tutte le righe.
     Xt_full = X[train]
-    Xt = (Xt_full[rng.choice(len(Xt_full), 1024, replace=False)]
+    Xt = (Xt_full[rng_diag.choice(len(Xt_full), 1024, replace=False)]
           if len(Xt_full) > 1024 else Xt_full)
+    c_sub = C[train][rng_diag.choice(train.sum(), 512)]
+    # Modelli all'inizializzazione, uno per ramo. Il riferimento va preso sul
+    # MEDESIMO ramo: confrontare il condizionato addestrato con un modello
+    # iniziale NON condizionato mescola due differenze e puo' far apparire
+    # appreso un generatore fermo.
+    cond0 = QGAN(d_c=3, **kw)
+    uncond0 = QGAN(d_c=0, **kw_u)
     sanity = {
-        "mmd_train_condizionato": metrics.mmd_rbf(
-            Xt, cond.sample(512, C[train][rng.choice(train.sum(), 512)]), sigma=sig),
         "n_train": int(len(Xt_full)),
+        "mmd_train_condizionato": metrics.mmd_rbf(
+            Xt, cond.sample(512, c_sub), sigma=sig),
         "mmd_train_incondizionato": metrics.mmd_rbf(
             Xt, uncond.sample(512), sigma=sig),
-        "mmd_train_iniziale": metrics.mmd_rbf(
-            Xt, QGAN(d_c=0, **kw).sample(512), sigma=sig),
+        "mmd_train_iniziale_cond": metrics.mmd_rbf(
+            Xt, cond0.sample(512, c_sub), sigma=sig),
+        "mmd_train_iniziale_incond": metrics.mmd_rbf(
+            Xt, uncond0.sample(512), sigma=sig),
     }
+    # Chiave storica, conservata per non rompere la lettura dei file gia'
+    # salvati; il confronto corretto usa le due chiavi per ramo.
+    sanity["mmd_train_iniziale"] = sanity["mmd_train_iniziale_incond"]
 
     # Le tre grandezze in conflitto, da leggere insieme:
     #  - c/z  : quanto l'uscita risponde al condizionamento
@@ -260,19 +303,41 @@ def run_seed(seed, steps, verbose=0, theta_init=0.1, latent_hi=np.pi,
     #    diversita' ai campioni. Un rapporto alto ottenuto stringendo l'uscita
     #    non e' un buon risultato.
     hc = cond.history
-    gen_std = float(cond.sample(512, C[train][rng.choice(train.sum(), 512)]).std(0).mean())
+    gen_std = float(cond.sample(512, c_sub).std(0).mean())
+    # c/z misurato sui MODELLI, non letto dalla storia: history[0] e' la prima
+    # VALUTAZIONE (al passo eval_every, non al passo zero) e history[-1] e'
+    # l'ultima valutazione, non il checkpoint effettivamente ripristinato.
+    lh_vec = cond._latent_hi_vec.tolist()
+    cz_init = cond0.gen.conditioning_sensitivity(
+        cond0.theta, n=200, seed=seed, latent_hi=lh_vec)["rapporto"]
+    cz_ckpt = cond.gen.conditioning_sensitivity(
+        cond.theta, n=200, seed=seed, latent_hi=lh_vec)["rapporto"]
+    # Risposta a ciascuna componente di c presa da sola: la media non
+    # distingue un condizionamento che usa tutte le componenti da uno che ne
+    # ignora una parte.
+    sens_ingresso = cond.gen.input_sensitivity(
+        cond.theta, n=200, seed=seed, latent_hi=lh_vec).tolist()
     conflitto = {
         "theta_init": theta_init,
         "n_train": int(train.sum()),
         "per_cella": PER_CELL,
+        "per_cella_eval": PER_CELL_EVAL,
+        "target": TARGET,
         "ordine": ORDINE,
         "latent_hi": np.atleast_1d(latent_hi).tolist(),
         "latent_hi_uncond": float(kw_u["latent_hi"]),
         "hidden": list(hidden),
         "label_smoothing": label_smoothing,
         "weight_decay": weight_decay,
-        "c_su_z_iniziale": hc["sensibilita_c"][0],
-        "c_su_z_finale": hc["sensibilita_c"][-1],
+        "c_su_z_iniziale": float(cz_init),
+        "c_su_z_finale": float(cz_ckpt),
+        "c_su_z_ultima_valutazione": hc["sensibilita_c"][-1],
+        "sensibilita_per_ingresso": sens_ingresso,
+        "best_step": int(cond.best_step_),
+        "steps_run": int(cond.steps_run_),
+        "monitor": cond.monitor_,
+        "strati_assi": getattr(cond, "strati_assi_", None),
+        "strati_utili": getattr(cond, "strati_utili_", None),
         "grad_var_iniziale": hc["grad_var"][0],
         "grad_var_minima": float(np.min(hc["grad_var"])),
         "theta_ampiezza_finale": hc["theta_ampiezza"][-1],
@@ -330,25 +395,30 @@ def main():
                     help="finestre per cella nella griglia di addestramento; "
                          "cambia n senza cambiare il costo, che dipende solo "
                          "da max_steps (FASE2.md §18)")
-    ap.add_argument("--ordine", default="b6",
+    ap.add_argument("--ordine", default="naturale",
                     choices=list(ORDINI),
                     help="assegnazione delle osservabili ai qubit; solo per "
-                         "--target qkd")
+                         "--target qkd. Il default e' l'ordine naturale, "
+                         "deciso in B.6 e FASE2 §19; 'b6' resta disponibile "
+                         "come variante storica esplicita")
     ap.add_argument("--target", default="omogeneo",
                     choices=["omogeneo", "qkd"],
                     help="'qkd' usa le dispersioni misurate sulla griglia "
-                         "reale, con fattore 47 fra osservabili")
+                         "reale, con fattore 3 fra osservabili")
     ap.add_argument("--hidden", default="32,16",
                     help="strati nascosti del discriminatore, separati da "
                          "virgola; (32,16) e' il valore dell'Appendice A")
     ap.add_argument("--label-smoothing", type=float, default=0.0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
-    ap.add_argument("--latent-hi", type=str, default="0.7342",
+    ap.add_argument("--latent-hi", type=str, default="0.8200",
                     help="scalare, oppure 5 valori separati da virgola "
                          "(un raggio per qubit). "
                          "Estremo superiore del latente per il ramo "
-                         "CONDIZIONATO. Il default 0,7342 e' il valore deciso "
-                         "in Appendice B.2; il valore di SPEC §3 e' pi, che "
+                         "CONDIZIONATO. Il default 0,8200 e' il raggio che "
+                         "eguaglia la dispersione della griglia rigenerata; "
+                         "0,7342 era calcolato sulla griglia con sift_rate e "
+                         "loss_rate costanti per corsa. Il valore di SPEC §3 "
+                         "e' pi, che "
                          "pero' produce dispersioni cinque volte troppo "
                          "grandi e skill negativo (FASE2.md §15.2)")
     ap.add_argument("--latent-hi-uncond", type=float, default=None,
@@ -356,41 +426,77 @@ def main():
                          "default pi, che e' il suo ottimo. Non ereditare "
                          "--latent-hi: penalizzerebbe la baseline e "
                          "gonfierebbe il guadagno sulla MMD")
+    ap.add_argument("--backend", default="denso", choices=["denso", "aer"],
+                    help="simulatore del circuito. 'denso' e' vettorizzato sul batch, verificato contro Aer a 1e-15 su forward e jacobiana e molto piu' rapido; 'aer' e' il riferimento di SPEC §7.2")
     ap.add_argument("--theta-init", type=float, default=0.1,
                     help="ampiezza dell'inizializzazione di theta; 0,1 e' il "
                          "valore congelato in SPEC-FASE2 §7")
     ap.add_argument("--verbose", type=int, default=0)
+    ap.add_argument("--forza", action="store_true",
+                    help="riesegue e riaccoda anche semi gia' presenti nel "
+                         "file con la stessa configurazione")
     ap.add_argument("--out", default="results/conditional_validation.jsonl")
     a = ap.parse_args()
 
-    global TARGET, PER_CELL, ORDINE
+    global TARGET, PER_CELL, ORDINE, BACKEND
     TARGET = a.target
     ORDINE = a.ordine
+    BACKEND = a.backend
     PER_CELL = a.per_cella
     hidden = tuple(int(x) for x in a.hidden.split(","))
     lh = [float(x) for x in str(a.latent_hi).split(",")]
     a.latent_hi = lh[0] if len(lh) == 1 else lh
     if abs(np.mean(lh) - np.pi) < 1e-6:
         print("ATTENZIONE: latente a pi, il valore di SPEC §3. Appendice B.2 "
-              "lo sostituisce\n  con 0,7342: a pi le dispersioni escono cinque "
-              "volte troppo grandi e lo\n  skill e' negativo (FASE2.md §15.2). "
-              "Usare --latent-hi 0.7342.\n", flush=True)
+              "lo sostituisce\n  con 0,8200: a pi le dispersioni escono troppo "
+              "grandi e lo\n  skill e' negativo (FASE2.md §15.2). "
+              "Usare --latent-hi 0.8200.\n", flush=True)
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
+
+    # Configurazione completa, firmata: identifica la corsa nei risultati e
+    # permette di riconoscere un riaccodamento. Lo script accodava sempre, e
+    # in n_P8_s0, n_P32_s0 e n_P128_s0 sono finite righe identiche.
+    config = dict(
+        FROZEN, steps=a.steps, per_cella=PER_CELL, per_cella_eval=PER_CELL_EVAL,
+        backend=BACKEND,
+        target=TARGET, ordine=ORDINE, hidden=list(hidden),
+        latent_hi=np.atleast_1d(a.latent_hi).tolist(),
+        latent_hi_uncond=a.latent_hi_uncond, theta_init=a.theta_init,
+        label_smoothing=a.label_smoothing, weight_decay=a.weight_decay,
+        seed_base=SEED_BASE, seed_test=SEED_TEST,
+        assi=[ax.tolist() for ax in AXES],
+    )
+    config["hidden"] = list(hidden)
+    fr = corsa.firma(config)
+    gia = corsa.gia_presenti(a.out)
+    dup = corsa.duplicati(a.out)
+    print(f"configurazione {fr}   codice {corsa.versione_codice()}")
+    if dup:
+        print(f"ATTENZIONE: {a.out} contiene gia' {dup} righe duplicate: "
+              "vanno rimosse prima di qualunque analisi, perche' gonfiano la "
+              "numerosita' e sottostimano gli errori standard.", flush=True)
+
     rows = []
     for s in range(a.seed_offset, a.seed_offset + a.seeds):
+        if (fr, s) in gia and not a.forza:
+            print(f"[seme {s}] gia' presente con questa configurazione, "
+                  "saltato (--forza per rieseguire)", flush=True)
+            continue
         print(f"[seme {s}]", flush=True)
         r = run_seed(s, a.steps, a.verbose, theta_init=a.theta_init,
                      latent_hi=a.latent_hi,
                      latent_hi_uncond=a.latent_hi_uncond, hidden=hidden,
                      label_smoothing=a.label_smoothing,
                      weight_decay=a.weight_decay)
-        with open(a.out, "a") as f:
-            f.write(json.dumps(r, default=float) + "\n")
+        r.update(corsa.intestazione(config))
+        corsa.scrivi(a.out, r)
         rows.append(r)
         sa = r["sanity"]
-        print(f"  controllo: MMD sul training  iniziale {sa['mmd_train_iniziale']:.4f}"
-              f"  cond {sa['mmd_train_condizionato']:.4f}"
-              f"  incond {sa['mmd_train_incondizionato']:.4f}", flush=True)
+        print(f"  controllo: MMD sul training  condizionato "
+              f"{sa['mmd_train_iniziale_cond']:.4f} -> "
+              f"{sa['mmd_train_condizionato']:.4f}   incondizionato "
+              f"{sa['mmd_train_iniziale_incond']:.4f} -> "
+              f"{sa['mmd_train_incondizionato']:.4f}", flush=True)
         print(f"  risposta r={r['risposta_correlazione']:+.3f}   "
               f"MMD celle escluse: cond {r['mmd_condizionato']:.4f}  "
               f"incond {r['mmd_incondizionato']:.4f}  "
@@ -412,7 +518,8 @@ def main():
         print(f"  conflitto:  theta_init {k['theta_init']:.2f}  "
               f"z<={np.round(k['latent_hi'],3)} "
               f"(incond {k['latent_hi_uncond']:.3f})  "
-              f"c/z {k['c_su_z_iniziale']:.3f}->{k['c_su_z_finale']:.3f}  "
+              f"c/z {k['c_su_z_iniziale']:.3f}->{k['c_su_z_finale']:.3f} "
+              f"(checkpoint, passo {k['best_step']})  "
               f"Var(g) min {k['grad_var_minima']:.2e}  "
               f"dispersione gen {k['dispersione_generata']:.4f} "
               f"(reale {k['dispersione_reale']:.4f})", flush=True)
@@ -430,7 +537,7 @@ def main():
         print(f"           baseline incondizionata con z<={lu:.3f}, "
               f"il suo ottimo, non {lc:.3f}")
     sa = np.array([r["sanity"]["mmd_train_condizionato"] for r in rows])
-    si = np.array([r["sanity"]["mmd_train_iniziale"] for r in rows])
+    si = np.array([r["sanity"]["mmd_train_iniziale_cond"] for r in rows])
     if (sa >= si * 0.9).all():
         print("\nATTENZIONE: la MMD sul training non e' scesa rispetto")
         print("all'inizializzazione. I generatori non hanno appreso, e il")

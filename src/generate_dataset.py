@@ -39,6 +39,34 @@ DEPOLAR_TOTALS = [0.01, 0.02, 0.03, 0.045, 0.06]
 
 SEEDS = [1, 2, 3, 4, 5]
 
+# --- griglia NON STAZIONARIA (profili temporali) ---------------------
+# Separata dalla principale, che resta congelata con la sua impronta.
+#   deriva          AR(1) lento sulla depolarizzazione: autocorrelazione VERA
+#                   fra finestre, cioe' qualcosa che w_{t-1} puo' predire.
+#   intermittente   Eve che si accende e spegne con periodo piu' corto della
+#                   traccia: ogni traccia contiene una transizione.
+#   entrambi        i due insieme.
+PROFILI = ["deriva", "intermittente", "entrambi"]
+NS_RATES = [0.25, 0.50, 1.0]
+NS_LENGTHS = [10.0, 20.0]
+NS_DEPOLS = [0.02, 0.045]
+OUT_NS = Path(__file__).resolve().parent.parent / "data" / "qber_grid_ns.csv"
+
+
+def costruisci_profili(nome, seed):
+    """(profilo_eve, profilo_depol) dal nome. 'costante' = stazionario."""
+    cost = m.profilo_costante()
+    if nome == "costante":
+        return cost, cost
+    if nome == "deriva":
+        return cost, m.profilo_deriva(seed)
+    if nome == "intermittente":
+        return m.profilo_intermittente(fase=m.fase_da_seme(seed)), cost
+    if nome == "entrambi":
+        return (m.profilo_intermittente(fase=m.fase_da_seme(seed)),
+                m.profilo_deriva(seed))
+    raise ValueError(f"profilo non riconosciuto: {nome!r}")
+
 
 
 NUM_BITS = 100_000          # riferimento a 10 km
@@ -113,8 +141,15 @@ def grid(smoke=False):
         cells = itertools.product(INTERCEPT_RATES, LENGTHS_KM,
                                   DEPOLAR_TOTALS, SEEDS)
         scale = 1.0
-    return [(r, L, d, sd, bits_for(L, scale), WINDOW)
+    return [("costante", r, L, d, sd, bits_for(L, scale), WINDOW)
             for r, L, d, sd in cells]
+
+
+def grid_ns():
+    """Griglia non stazionaria: 3 profili x 3 tassi x 2 L x 2 dep x 5 semi."""
+    return [(pr, r, L, d, sd, bits_for(L), WINDOW)
+            for pr, r, L, d, sd in itertools.product(
+                PROFILI, NS_RATES, NS_LENGTHS, NS_DEPOLS, SEEDS)]
 
 
 def configure(length, depolar, seed):
@@ -128,17 +163,20 @@ def configure(length, depolar, seed):
     m.SEED = seed
 
 
-def run_cell(rate, length, depolar, seed, num_bits, window):
+def run_cell(profilo, rate, length, depolar, seed, num_bits, window):
     configure(length, depolar, seed)
+    p_eve, p_dep = costruisci_profili(profilo, seed)
     t0 = time.time()
     stats, rec, ricevute = run_bb84(intercept_rate=rate, num_bits=num_bits,
                                     seed=seed, verbose=False,
-                                    con_ricevute=True)
+                                    con_ricevute=True,
+                                    profilo_eve=p_eve, profilo_depol=p_dep)
     ws = windows(rec, size=window, ricevute=ricevute)
     elapsed = time.time() - t0
 
     rows = [{
         # ---- condizionamento c ----
+        "profilo": profilo,
         "intercept_rate": rate,
         "length_km": length,
         "depolar_total": depolar,
@@ -166,6 +204,9 @@ def run_cell(rate, length, depolar, seed, num_bits, window):
         "n_grezze": w["n_grezze"],
         "t_start": w["t_start"],
         # ---- target causale (NON osservabile) ----
+        # ---- condizioni effettive nella finestra (target, non osservabili) ----
+        "rate_eff": w["rate_eff"],
+        "depol_eff": w["depol_eff"],
         "f_canale": w["f_canale"],
         "f_eve": w["f_eve"],
         "f_rivelatore": w["f_rivelatore"],
@@ -199,7 +240,7 @@ def benchmark():
 
     for rate, L, dep in cases:
         nbits = bits_for(L)
-        rows, el, st = run_cell(rate, L, dep, 1, nbits, WINDOW)
+        rows, el, st = run_cell("costante", rate, L, dep, 1, nbits, WINDOW)
         tot_bits += nbits
         tot_time += el
         print(f"r={rate:.2f} L={L:5.1f} dep={dep:.2f} | {nbits:>7d} bit "
@@ -223,8 +264,11 @@ def benchmark():
 # GENERAZIONE
 # =====================================================================
 
-def generate(smoke=False, workers=None, parallel=True):
-    tasks = grid(smoke=smoke)
+def generate(smoke=False, workers=None, parallel=True, ns=False):
+    global OUT
+    if ns:
+        OUT = OUT_NS
+    tasks = grid_ns() if ns else grid(smoke=smoke)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     state = {"writer": None, "written": 0, "vuote": 0, "incoerenti": 0}
@@ -242,19 +286,19 @@ def generate(smoke=False, workers=None, parallel=True):
           f"{'  (smoke)' if smoke else ''}\n")
 
     def handle(fh, n, rows, el, st, args):
-        rate, L, dep, seed = args[0], args[1], args[2], args[3]
+        prof, rate, L, dep, seed = args[0], args[1], args[2], args[3], args[4]
         # Coerenza fra catena modellata e catena eseguita, su OGNI cella.
         # Costa zero: e' gia' calcolata in run_bb84. Meglio accorgersene
         # alla cella 12 che a sei ore di simulazione finite.
         if st.get("discordanze"):
             state["incoerenti"] += 1
-            print(f"[{n}/{len(tasks)}] INCOERENTE r={rate} L={L} dep={dep} "
-                  f"seed={seed} -- {st['discordanze']}/"
+            print(f"[{n}/{len(tasks)}] INCOERENTE {prof} r={rate} L={L} "
+                  f"dep={dep} seed={seed} -- {st['discordanze']}/"
                   f"{st['n_non_intercettati']} discordanze analitico/osservato")
         if not rows:
             state["vuote"] += 1
-            print(f"[{n}/{len(tasks)}] VUOTA r={rate} L={L} dep={dep} "
-                  f"seed={seed} -- perdita {st['loss_rate']:.1%}")
+            print(f"[{n}/{len(tasks)}] VUOTA {prof} r={rate} L={L} "
+                  f"dep={dep} seed={seed} -- perdita {st['loss_rate']:.1%}")
             return
         if state["writer"] is None:
             state["writer"] = csv.DictWriter(fh, fieldnames=list(rows[0]))
@@ -262,8 +306,8 @@ def generate(smoke=False, workers=None, parallel=True):
         state["writer"].writerows(rows)
         state["written"] += len(rows)
         eta = (time.time() - t0) / n * (len(tasks) - n) / 60
-        print(f"[{n}/{len(tasks)}] r={rate:.2f} L={L:5.1f} dep={dep:.2f} "
-              f"seed={seed} -> {len(rows):3d} finestre "
+        print(f"[{n}/{len(tasks)}] {prof:14s} r={rate:.2f} L={L:5.1f} "
+              f"dep={dep:.2f} seed={seed} -> {len(rows):3d} finestre "
               f"({el:5.1f}s, ETA {eta:4.0f} min)")
 
     with OUT.open("w", newline="") as fh:
@@ -302,6 +346,9 @@ if __name__ == "__main__":
     ap.add_argument("--benchmark", action="store_true")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--serial", action="store_true")
+    ap.add_argument("--ns", action="store_true",
+                    help="genera la griglia NON STAZIONARIA (profili "
+                         "temporali) in data/qber_grid_ns.csv")
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--out", type=Path, default=None,
                     help="percorso del CSV; default data/qber_grid.csv "
@@ -313,4 +360,5 @@ if __name__ == "__main__":
     if a.benchmark:
         benchmark()
     else:
-        generate(smoke=a.smoke, workers=a.workers, parallel=not a.serial)
+        generate(smoke=a.smoke, workers=a.workers, parallel=not a.serial,
+                 ns=a.ns)
