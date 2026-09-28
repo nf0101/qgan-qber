@@ -36,12 +36,12 @@
   "smoke": false,
   "parallelo": true,
   "workers": 8,
-  "versione_codice": "e0d5c9e+modificato",
-  "istante": "2026-09-25T10:17:31+0200",
+  "versione_codice": "d6000ef+modificato",
+  "istante": "2026-09-28T11:22:15+0200",
   "out": "/home/nf0101/PycharmProjects/Quantum/qgan-qber/data/qber_grid_ns.csv",
-  "finestre_scritte": 28224,
+  "finestre_scritte": 18816,
   "celle_vuote": 0,
   "celle_incoerenti": 0,
-  "durata_min": 79.95,
-  "sha256": "028e7958e1ab54d63945f04bc95806dfee6e065665b85c6164ef269aa246d07f"
+  "durata_min": 47.84,
+  "sha256": "2dec8acabad3dbb48b1fda07d5c5038aaf644eb202a1c724fa8720c1b73bb943"
 }
