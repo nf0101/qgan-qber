@@ -12,4 +12,4 @@ data/
 .env
 
 # Prove locali
-src/test.py
+src/test.pyarchivio/*.csv

@@ -1,0 +1,4 @@
+Prima griglia non stazionaria. Il profilo 'deriva' agiva sulla
+depolarizzazione: acf del QBER +0,036, satura a +0,11 anche a sigma 1,0
+perche' dep/2 <= 0,0225 contro un rumore binomiale per finestra di ~0,025.
+Sostituita da deriva sul tasso di Eve. Conservata come negativo.
