@@ -13,3 +13,4 @@ data/
 
 # Prove locali
 src/test.pyarchivio/*.csv
+archivio/*.csv
