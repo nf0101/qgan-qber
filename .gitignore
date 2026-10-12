@@ -14,3 +14,7 @@ data/
 # Prove locali
 src/test.pyarchivio/*.csv
 archivio/*.csv
+data/ids_s*/
+logs/
+*.bak
+*.bak[0-9]

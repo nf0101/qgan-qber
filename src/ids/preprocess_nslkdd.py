@@ -129,8 +129,17 @@ def frame(P, y):
 
 
 def main():
+    import argparse
+    global OUT, SEED
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seed", type=int, default=SEED)
+    ap.add_argument("--out", default=str(OUT),
+                    help="directory di uscita; una per seme")
+    a = ap.parse_args()
+    SEED, OUT = a.seed, Path(a.out)
+    print(f"seme {SEED}   uscita {OUT}")
     OUT.mkdir(parents=True, exist_ok=True)
-    meta = {"k": K, "strategy": "PCA-6", "ratios": RATIOS,
+    meta = {"k": K, "strategy": f"PCA-{K}", "ratios": RATIOS,
             "pca_modes": PCA_MODES, "seed": SEED, "classes": {},
             "note": ("Test mai usato per decisioni. Variante 'local': PCA "
                      "adattata sul sottocampione sbilanciato. Variante "
@@ -138,7 +147,7 @@ def main():
                      "isolare l'effetto della rappresentazione.")}
 
     for cls, labels in CLASSES.items():
-        d = build(labels)
+        d = build(labels, SEED)
         ytr, Xtr = d["ytr"], d["Xtr"]
         print(f"\n=== {cls} ===")
         print(f"train {Xtr.shape}  minoritaria {ytr.sum():,} "

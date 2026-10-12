@@ -1,0 +1,11 @@
+configurazione 220f3e46ec04   codice d93064f+modificato
+[seme 4]
+/home/nf0101/PycharmProjects/Quantum/qgan-qber/qgan/src/qgan/model.py:301: UserWarning: dataset troppo piccolo per uno split: l'MMD di arresto e' calcolato sugli stessi dati di addestramento
+  warnings.warn(
+  minoritaria 53 -> 269  su 53927 righe
+  nessuna       F1  rf 0.5527  lr 0.0000  gb 0.5960
+  bilanciato    F1  rf 0.7730  lr 0.1785  gb 0.6287
+  duplicazione  F1  rf 0.7284  lr 0.0000  gb 0.7358   MMD vs reali -0.0089
+  rumore        F1  rf 0.7284  lr 0.0000  gb 0.7462   MMD vs reali -0.0091
+  smote         F1  rf 0.7829  lr 0.0000  gb 0.6786   MMD vs reali -0.0078
+  qgan          F1  rf 0.5786  lr 0.0000  gb 0.7319   MMD vs reali 0.4203
