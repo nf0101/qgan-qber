@@ -12,9 +12,16 @@ data/
 .env
 
 # Prove locali
+<<<<<<< HEAD
 src/test.pyarchivio/*.csv
 archivio/*.csv
 data/ids_s*/
 logs/
 *.bak
 *.bak[0-9]
+=======
+src/test.py
+
+.repomixignore
+short-repository.md
+>>>>>>> fb295fb (remove repomix from branch)
