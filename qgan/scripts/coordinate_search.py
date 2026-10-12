@@ -198,6 +198,7 @@ def run_one(cfg, target_name, seed, steps, verbose=0):
         monitor_repeats=1,
         mmd_smooth=3,
         seed=seed,
+        backend="denso",
         verbose=verbose,
     )
     t0 = time.time()

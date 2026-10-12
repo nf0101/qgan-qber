@@ -1,0 +1,8 @@
+configurazione 94947fbed754   codice d93064f+modificato
+[seme 1]
+  controllo: MMD sul training  condizionato 1.0010 -> 0.0088   incondizionato 0.2563 -> 0.0296
+  risposta r=+0.959   MMD celle escluse: cond 0.2258  incond 0.2148  guadagno -0.0110
+  posizione: MAE cond 0.0580  banale 0.0473  SKILL -0.226  (incond +0.276)
+  dispersione: vera 0.0480  generata 0.0340
+  per osservabile:  qber 0.0421/0.0534   qber_rect 0.0242/0.0711   qber_diag 0.0338/0.0714   sift_rate 0.0236/0.0358   loss_rate 0.0463/0.0208
+  conflitto:  theta_init 0.10  z<=[0.82] (incond 3.142)  c/z 0.308->17.419 (checkpoint, passo 2125)  Var(g) min 1.64e-05  dispersione gen 0.1750 (reale 0.1698)

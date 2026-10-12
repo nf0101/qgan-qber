@@ -27,6 +27,29 @@
     4,
     5
   ],
+  "ns_seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "profili": [
+    "deriva_eve",
+    "intermittente",
+    "entrambi"
+  ],
+  "sigma_deriva_eve": 0.5,
   "num_bits_riferimento": 100000,
   "window": 200,
   "p_detector_err": 0.01,
@@ -36,12 +59,12 @@
   "smoke": false,
   "parallelo": true,
   "workers": 8,
-  "versione_codice": "d6000ef+modificato",
-  "istante": "2026-09-28T11:22:15+0200",
+  "versione_codice": "d93064f+modificato",
+  "istante": "2026-10-01T15:36:46+0200",
   "out": "/home/nf0101/PycharmProjects/Quantum/qgan-qber/data/qber_grid_ns.csv",
-  "finestre_scritte": 18816,
+  "finestre_scritte": 56496,
   "celle_vuote": 0,
   "celle_incoerenti": 0,
-  "durata_min": 47.84,
-  "sha256": "2dec8acabad3dbb48b1fda07d5c5038aaf644eb202a1c724fa8720c1b73bb943"
+  "durata_min": 160.0,
+  "sha256": "786146b50b4d369b0a5c41a0333fa9b4c7517a1ef750b092f4c00a906fb410d5"
 }

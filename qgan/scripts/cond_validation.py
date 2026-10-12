@@ -465,6 +465,10 @@ def main():
         label_smoothing=a.label_smoothing, weight_decay=a.weight_decay,
         seed_base=SEED_BASE, seed_test=SEED_TEST,
         assi=[ax.tolist() for ax in AXES],
+        # Le dispersioni del bersaglio dipendono dalla griglia da cui sono
+        # calibrate: due corse con SIGMA_BASE diverse devono avere firme
+        # diverse, altrimenti il controllo duplicati le confonde.
+        sigma_base=SIGMA_BASE.tolist(),
     )
     config["hidden"] = list(hidden)
     fr = corsa.firma(config)

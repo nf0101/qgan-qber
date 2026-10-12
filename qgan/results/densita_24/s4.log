@@ -1,0 +1,8 @@
+configurazione 7c85f605ec08   codice d93064f+modificato
+[seme 4]
+  configurazioni 24 interne su 120, escluse 12, in addestramento 24   train 18834  test 9412   escluse fuori inviluppo 1
+  MAE  cond 0.06637  incond 0.16187  banale 0.16434  vicino 0.06854  lineare 0.01573
+  SKILL vs banale +0.5961   vs vicino +0.0317   vs lineare -3.2206
+  MMD  cond 0.11308  banale 0.44485  vicino 0.18781  lineare 0.02634
+  SKILL MMD vs banale +0.7458   vs vicino +0.3979   vs lineare -3.2933
+  incond +0.0150   c/z 0.525->13.214   passo 1950/5400

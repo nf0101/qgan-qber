@@ -1,169 +1,225 @@
-"""Confronto appaiato per cella, come prescritto da SPEC-FASE2 §11.
+"""Inferenza con DUE raggruppamenti incrociati: corse e celle.
 
-Lo skill riportato per seme ha deviazione 0,273 su una media di 0,185: l'errore
-copre il 150 % del risultato. La componente dominante non e' rumore di stima ma
-la selezione delle celle escluse — il MAE del riferimento banale varia di un
-fattore 1,7 fra semi, perche' quando le celle capitano vicine alla media della
-griglia predire la media diventa insolitamente buono.
+Chiude il difetto 4 dell'audit. La versione precedente concatenava tutte le
+righe per cella e applicava t-test e bootstrap ordinario come se ciascuna
+fosse una replica indipendente. Non lo sono: le quattro celle di una corsa
+condividono generatore, addestramento e checkpoint, e le stesse celle fisiche
+ricompaiono fra corse. Venti righe erano cinque corse per quattro celle.
 
-§11 della specifica prescrive per questo il confronto appaiato sulle stesse
-celle. Applicato qui significa tre cose:
+Qui l'unita' di inferenza e' DICHIARATA, e se ne riportano tre, perche'
+rispondono a domande diverse:
 
-  1. SKILL MESSO IN COMUNE. Un solo rapporto sulle MAE aggregate di tutte le
-     celle di tutti i semi, invece di una media di rapporti per seme. Con 5
-     semi x 4 celle sono 20 osservazioni invece di 5.
+  per corsa    generalizza su nuove ESECUZIONI, celle fissate. E' la domanda
+               "se rilancio l'addestramento, ottengo lo stesso risultato?".
+  per cella    generalizza su nuove CELLE, esecuzioni fissate. "il risultato
+               vale su regioni del dominio diverse da queste?"
+  incrociata   generalizza su entrambe. E' l'intervallo onesto da riportare,
+               e il piu' largo dei tre.
 
-  2. TEST APPAIATO CONTRO IL BANALE. Per ciascuna cella, la differenza
-     `MAE_banale - MAE_condizionato`. Il segno dice se il generatore batte la
-     media della griglia su quella cella; il test dice se il risultato regge.
-     E' molto piu' potente del test sui 5 skill per seme, perche' elimina la
-     variabilita' del denominatore.
+Il bootstrap incrociato e' quello a nido di piccione (Owen): si ricampionano
+corse e celle INDIPENDENTEMENTE e si prendono le osservazioni alle
+intersezioni. E' la procedura corretta per un disegno incrociato, dove un
+bootstrap su un solo asse sottostima la varianza.
 
-  3. TEST APPAIATO CONTRO L'INCONDIZIONATO. La stessa cosa con
-     `MAE_incondizionato - MAE_condizionato`: isola il contributo del
-     condizionamento, che e' cio' che RQ2 misura.
+AVVERTENZA sulla potenza. La griglia sintetica ha 8 celle interne e ogni
+corsa ne esclude 4: le celle distinte sono poche e l'intervallo incrociato
+sara' largo. Non e' un difetto della procedura, e' quanta informazione c'e'.
+Dichiararlo e' il punto.
 
-Il terzo e' il confronto che conta per RQ2; il secondo dice se il generatore ha
-valore assoluto; il primo e' il numero da riportare.
-
-    python scripts/analisi_appaiata.py results/rq2_qkd_unico_5.jsonl
-    python scripts/analisi_appaiata.py a.jsonl b.jsonl --etichette unico,per_feature
+    python scripts/analisi_appaiata.py --dir results/n_P32
+    python scripts/analisi_appaiata.py --dir results/raggi_unico --quantita mae
 """
 
 from __future__ import annotations
 
 import argparse
+import glob
 import json
+import os
+import sys
+from collections import defaultdict
 
 import numpy as np
-from scipy import stats
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
-def carica(path):
-    righe = [json.loads(l) for l in open(path) if l.strip()]
-    celle = []
+def carica(percorso):
+    """Righe dai JSONL, deduplicate per (firma, seme)."""
+    file = sorted(glob.glob(os.path.join(percorso, "*.jsonl")))
+    if not file:
+        file = [percorso] if os.path.isfile(percorso) else []
+    viste, righe = set(), []
+    for f in file:
+        for riga in open(f):
+            riga = riga.strip()
+            if not riga:
+                continue
+            r = json.loads(riga)
+            chiave = (r.get("firma_config"), r.get("seed"))
+            if chiave in viste:
+                continue
+            viste.add(chiave)
+            righe.append(r)
+    firme = {r.get("firma_config") for r in righe}
+    if len(firme) > 1:
+        raise SystemExit(
+            f"configurazioni diverse nello stesso insieme: {sorted(firme)}. "
+            "L'analisi appaiata richiede corse omogenee."
+        )
+    return sorted(righe, key=lambda r: r["seed"])
+
+
+def estrai(righe, quantita):
+    """{(corsa, cella): valore} piu' gli elenchi di corse e celle.
+
+    `per_cella` e' la struttura prodotta da cond_validation.py. Se i nomi dei
+    campi non corrispondono, lo script elenca quelli disponibili invece di
+    indovinare.
+    """
+    oss, corse, celle = {}, [], set()
     for r in righe:
-        for p in r.get("per_cella", []):
-            celle.append({
-                "seed": r["seed"],
-                "cella": p["cella"],
-                "c": tuple(p["c"]),
-                "cond": p["mae_condizionato"],
-                "incond": p["mae_incondizionato"],
-                "banale": p["mae_banale"],
-            })
-    return righe, celle
+        s = r["seed"]
+        corse.append(s)
+        pc = r.get("per_cella")
+        ce = r.get("celle_escluse")
+        if not pc or not ce:
+            raise SystemExit("righe senza 'per_cella' o 'celle_escluse'")
+        for cella, d in zip(ce, pc):
+            if not isinstance(d, dict):
+                raise SystemExit(
+                    "'per_cella' non contiene dizionari; struttura trovata: "
+                    f"{type(d).__name__}"
+                )
+            v = valore(d, quantita)
+            oss[(s, int(cella))] = v
+            celle.add(int(cella))
+    return oss, corse, sorted(celle)
 
 
-def appaiato(d, nome):
-    """Test appaiato su differenze gia' calcolate. Restituisce una riga."""
-    d = np.asarray(d, dtype=float)
-    n = len(d)
-    if n < 2:
-        return f"{nome}: meno di due celle, test non applicabile"
-    sem = d.std(ddof=1) / np.sqrt(n)
-    t = d.mean() / sem if sem > 0 else np.nan
-    p = float(stats.ttest_1samp(d, 0.0).pvalue) if sem > 0 else np.nan
-    # test dei segni, non parametrico: non assume normalita' delle differenze
-    pos = int((d > 0).sum())
-    p_segni = float(stats.binomtest(pos, n, 0.5).pvalue)
-    return (f"{nome:<34} {d.mean():+9.5f} {sem:9.5f} {t:7.2f} {p:9.4f} "
-            f"{pos:>3}/{n:<3} {p_segni:9.4f}")
+def valore(d, quantita):
+    """Il valore della cella, con i nomi di campo tollerati."""
+    candidati = {
+        "skill": ["skill", "skill_condizionato", "skill_cond"],
+        "mae": ["mae_condizionato", "mae_cond"],
+        "guadagno": ["guadagno", "guadagno_mmd"],
+        "divario": None,     # mae_banale - mae_condizionato
+    }
+    if quantita == "divario":
+        a = primo(d, ["mae_banale", "mae_trivial", "mae_riferimento"])
+        b = primo(d, ["mae_condizionato", "mae_cond"])
+        return float(a - b)
+    nomi = candidati.get(quantita)
+    if nomi is None:
+        raise SystemExit(f"quantita' non riconosciuta: {quantita}")
+    return float(primo(d, nomi))
 
 
-def analizza(path, etichetta):
-    righe, celle = carica(path)
-    if not celle:
-        print(f"{etichetta}: nessuna cella nel file")
-        return
-    cond = np.array([c["cond"] for c in celle])
-    inc = np.array([c["incond"] for c in celle])
-    ban = np.array([c["banale"] for c in celle])
-    semi = sorted({c["seed"] for c in celle})
-
-    print(f"\n{'=' * 92}")
-    print(f"{etichetta}   {len(celle)} celle su {len(semi)} semi {semi}")
-    print("=" * 92)
-
-    # --- skill per seme, per confronto con quanto gia' riportato ---------
-    per_seme = []
-    for s in semi:
-        m = np.array([c["seed"] for c in celle]) == s
-        per_seme.append(1 - cond[m].mean() / ban[m].mean())
-    per_seme = np.array(per_seme)
-    print(f"skill per seme        {per_seme.mean():+.3f} +- "
-          f"{per_seme.std(ddof=1):.3f}   ({(per_seme > 0).sum()}/{len(per_seme)})")
-
-    # --- skill messo in comune -------------------------------------------
-    skill_pool = 1 - cond.mean() / ban.mean()
-    # errore standard per bootstrap sulle celle: il rapporto non ha una
-    # formula chiusa affidabile con 20 osservazioni
-    rng = np.random.default_rng(0)
-    bs = [1 - cond[i].mean() / ban[i].mean()
-          for i in (rng.integers(0, len(celle), len(celle)) for _ in range(2000))]
-    lo, hi = np.percentile(bs, [2.5, 97.5])
-    print(f"skill messo in comune {skill_pool:+.3f}   "
-          f"intervallo bootstrap 95% [{lo:+.3f}, {hi:+.3f}]")
-    print(f"  MAE condizionato {cond.mean():.5f}   banale {ban.mean():.5f}   "
-          f"incondizionato {inc.mean():.5f}")
-
-    # --- test appaiati ----------------------------------------------------
-    print(f"\n{'confronto':<34} {'media':>9} {'errore':>9} {'t':>7} "
-          f"{'p':>9} {'segni':>7} {'p segni':>9}")
-    print("-" * 92)
-    print(appaiato(ban - cond, "banale - condizionato"))
-    print(appaiato(inc - cond, "incondizionato - condizionato"))
-    print(appaiato(ban - inc, "banale - incondizionato"))
-
-    return {"etichetta": etichetta, "n_celle": len(celle),
-            "skill_per_seme": float(per_seme.mean()),
-            "skill_messo_in_comune": float(skill_pool),
-            "bootstrap_95": [float(lo), float(hi)],
-            "cond": cond, "incond": inc, "banale": ban,
-            "chiavi": [(c["seed"], c["c"]) for c in celle]}
+def primo(d, nomi):
+    for n in nomi:
+        if n in d:
+            return d[n]
+    raise SystemExit(
+        f"nessuno dei campi {nomi} e' presente. Campi disponibili nella "
+        f"cella: {sorted(d)}"
+    )
 
 
-def confronta(a, b):
-    """Confronto appaiato fra due configurazioni sulle stesse celle."""
-    ka = {k: i for i, k in enumerate(a["chiavi"])}
-    comuni = [k for k in b["chiavi"] if k in ka]
-    if not comuni:
-        print("\nnessuna cella in comune fra i due file: confronto non "
-              "appaiabile")
-        return
-    ia = [ka[k] for k in comuni]
-    kb = {k: i for i, k in enumerate(b["chiavi"])}
-    ib = [kb[k] for k in comuni]
-    d = a["cond"][ia] - b["cond"][ib]   # positivo = b migliore
-    print(f"\n{'=' * 92}")
-    print(f"CONFRONTO APPAIATO   {a['etichetta']} contro {b['etichetta']}   "
-          f"{len(comuni)} celle in comune")
-    print("=" * 92)
-    print(f"{'confronto':<34} {'media':>9} {'errore':>9} {'t':>7} "
-          f"{'p':>9} {'segni':>7} {'p segni':>9}")
-    print("-" * 92)
-    print(appaiato(d, f"MAE {a['etichetta']} - {b['etichetta']}"))
-    print(f"\nmedia positiva = {b['etichetta']} ha MAE minore, cioe' e' "
-          f"migliore")
+def media_su(oss, corse, celle):
+    v = [oss[(s, c)] for s in corse for c in celle if (s, c) in oss]
+    return float(np.mean(v)) if v else np.nan
+
+
+def bootstrap(oss, corse, celle, modo, repliche=20000, seed=0):
+    """Intervallo al 95% ricampionando corse, celle, o entrambe."""
+    rng = np.random.default_rng(seed)
+    nc, nk = len(corse), len(celle)
+    out = []
+    for _ in range(repliche):
+        cs = [corse[i] for i in rng.integers(0, nc, nc)] if modo in \
+            ("corsa", "incrociata") else corse
+        ks = [celle[i] for i in rng.integers(0, nk, nk)] if modo in \
+            ("cella", "incrociata") else celle
+        m = media_su(oss, cs, ks)
+        if not np.isnan(m):
+            out.append(m)
+    return float(np.percentile(out, 2.5)), float(np.percentile(out, 97.5))
+
+
+def componenti(oss, corse, celle):
+    """Quanta varianza sta fra corse, fra celle, e nel residuo."""
+    M = np.full((len(corse), len(celle)), np.nan)
+    for i, s in enumerate(corse):
+        for j, c in enumerate(celle):
+            if (s, c) in oss:
+                M[i, j] = oss[(s, c)]
+    gran = np.nanmean(M)
+    v_corsa = np.nanvar(np.nanmean(M, axis=1), ddof=1)
+    v_cella = np.nanvar(np.nanmean(M, axis=0), ddof=1)
+    res = M - np.nanmean(M, axis=1, keepdims=True) \
+            - np.nanmean(M, axis=0, keepdims=True) + gran
+    v_res = np.nanvar(res, ddof=1)
+    tot = v_corsa + v_cella + v_res
+    return v_corsa, v_cella, v_res, tot, M
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("files", nargs="+")
-    ap.add_argument("--etichette", default=None)
+    ap.add_argument("--dir", required=True,
+                    help="directory con i JSONL, o un singolo file")
+    ap.add_argument("--quantita", default="skill",
+                    choices=["skill", "mae", "guadagno", "divario"])
+    ap.add_argument("--repliche", type=int, default=20000)
+    ap.add_argument("--contro", type=float, default=0.0,
+                    help="valore di riferimento per il test dei segni")
     a = ap.parse_args()
 
-    et = (a.etichette.split(",") if a.etichette
-          else [f.split("/")[-1].replace(".jsonl", "") for f in a.files])
-    res = [analizza(f, e) for f, e in zip(a.files, et)]
-    res = [r for r in res if r]
-    if len(res) == 2:
-        confronta(res[0], res[1])
+    righe = carica(a.dir)
+    oss, corse, celle = estrai(righe, a.quantita)
+    v_corsa, v_cella, v_res, tot, M = componenti(oss, corse, celle)
 
-    print("\nLo skill messo in comune e' il numero da riportare: usa 20")
-    print("osservazioni invece di 5 e non risente della variabilita' del")
-    print("denominatore fra semi. Il test 'incondizionato - condizionato' e'")
-    print("quello che misura RQ2.")
+    print(f"{len(corse)} corse, {len(celle)} celle distinte, "
+          f"{len(oss)} osservazioni   quantita': {a.quantita}")
+    print(f"celle: {celle}")
+    conteggi = {c: sum(1 for s in corse if (s, c) in oss) for c in celle}
+    print(f"ricorrenze per cella: min {min(conteggi.values())} "
+          f"max {max(conteggi.values())}")
+    print()
+
+    print("DECOMPOSIZIONE DELLA VARIANZA")
+    for et, v in (("fra corse", v_corsa), ("fra celle", v_cella),
+                  ("residuo", v_res)):
+        print(f"  {et:12s} {v:.6f}   {v/tot:6.1%}")
+    print("  La componente dominante dice su cosa conviene spendere repliche.")
+    print()
+
+    media = float(np.nanmean(M))
+    print(f"MEDIA {media:+.4f}")
+    print("UNITA' DI INFERENZA          intervallo 95%        ampiezza")
+    for modo, et in (("corsa", "per corsa  (nuove esecuzioni)"),
+                     ("cella", "per cella  (nuove celle)"),
+                     ("incrociata", "incrociata (entrambe)")):
+        lo, hi = bootstrap(oss, corse, celle, modo, a.repliche)
+        segno = " " if lo > a.contro or hi < a.contro else "  contiene il riferimento"
+        print(f"  {et:30s} [{lo:+.4f}, {hi:+.4f}]  {hi-lo:.4f}{segno}")
+    print()
+
+    # Test dei segni sulle MEDIE PER CORSA: l'unita' e' la corsa, non la riga.
+    per_corsa = np.nanmean(M, axis=1)
+    seg = int((per_corsa > a.contro).sum())
+    n = int(np.isfinite(per_corsa).sum())
+    from scipy import stats
+    print(f"TEST DEI SEGNI sulle medie per corsa, contro {a.contro:+.4f}")
+    print(f"  {seg}/{n} corse sopra il riferimento   "
+          f"p = {stats.binomtest(seg, n, 0.5).pvalue:.5f}")
+    if n <= 20:
+        print(f"  p minimo ottenibile con {n} corse: "
+              f"{2 * 0.5 ** n:.5f} — e' il pavimento del test, non "
+              "l'ampiezza dell'effetto.")
+    print()
+    print("L'intervallo INCROCIATO e' quello da riportare: gli altri due "
+          "tengono\nfisso un asse e sottostimano l'incertezza di una "
+          "conclusione generale.")
 
 
 if __name__ == "__main__":

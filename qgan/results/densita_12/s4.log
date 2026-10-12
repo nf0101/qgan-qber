@@ -1,0 +1,8 @@
+configurazione cb1ccaf773f5   codice d93064f+modificato
+[seme 4]
+  configurazioni 24 interne su 120, escluse 12, in addestramento 12   train 9414  test 9412   escluse fuori inviluppo 0
+  MAE  cond 0.06860  incond 0.14766  banale 0.14868  vicino 0.08821  lineare 0.01510
+  SKILL vs banale +0.5386   vs vicino +0.2224   vs lineare -3.5439
+  MMD  cond 0.08784  banale 0.33559  vicino 0.26804  lineare 0.01261
+  SKILL MMD vs banale +0.7383   vs vicino +0.6723   vs lineare -5.9668
+  incond +0.0069   c/z 0.525->15.124   passo 2225/5400

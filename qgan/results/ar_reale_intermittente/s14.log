@@ -1,0 +1,5 @@
+configurazione 99235a11d045   codice d93064f+modificato
+[seme 14]
+  tracce  train 936  val 72  test 72   derive distinte in train 13
+  autoregressivo  MMD 0.04478   acf intra sintetica -0.111   (reale +0.363, nullo -0.070)   passo 725
+  per_finestra    MMD 0.03156   acf intra sintetica -0.089   (reale +0.363, nullo -0.070)   passo 550

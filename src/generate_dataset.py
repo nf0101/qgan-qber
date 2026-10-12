@@ -60,7 +60,16 @@ SIGMA_DERIVA_EVE = 0.5
 # Tassi nominali bassi: con m fino a 2,0 il prodotto r*m resta sotto 1 e il
 # segnale non viene tagliato dal limite superiore.
 NS_RATES = [0.25, 0.50]
-NS_LENGTHS = [10.0, 20.0]  # 3 profili x 2 tassi x 2 L x 2 dep x 5 semi = 120
+NS_LENGTHS = [10.0, 20.0]
+# QUINDICI semi, non cinque. profilo_deriva(seed) dipende SOLO dal seme,
+# quindi le 8 configurazioni di uno stesso seme condividono la stessa
+# realizzazione del moltiplicatore: il numero di semi E' il numero di forme
+# di deriva distinte. Con 5 semi l'addestramento ne vedrebbe 3, e un esito
+# negativo di §6 non si distinguerebbe da una diversita' insufficiente.
+# Far dipendere la deriva anche dalla cella romperebbe l'accoppiamento CRN
+# fra condizioni allo stesso seme, cioe' la proprieta' verificata con 0/299.
+NS_SEEDS = list(range(1, 16))
+# 3 profili x 2 tassi x 2 L x 2 dep x 15 semi = 360 celle
 NS_DEPOLS = [0.02, 0.045]
 OUT_NS = Path(__file__).resolve().parent.parent / "data" / "qber_grid_ns.csv"
 
@@ -137,6 +146,8 @@ def metadati(smoke, workers, parallel, out):
     return {
         "intercept_rates": INTERCEPT_RATES, "lengths_km": LENGTHS_KM,
         "depolar_totals": DEPOLAR_TOTALS, "seeds": SEEDS,
+        "ns_seeds": NS_SEEDS, "profili": PROFILI,
+        "sigma_deriva_eve": SIGMA_DERIVA_EVE,
         "num_bits_riferimento": NUM_BITS, "window": WINDOW,
         "p_detector_err": P_DETECTOR_ERR, "p_loss_length": P_LOSS_LENGTH,
         "eve_position": m.EVE_POSITION,
@@ -162,11 +173,25 @@ def grid(smoke=False):
             for r, L, d, sd in cells]
 
 
-def grid_ns():
-    """Griglia non stazionaria: 3 profili x 3 tassi x 2 L x 2 dep x 5 semi."""
+def semi_da_spec(spec):
+    """'1-15' oppure '6,7,8' -> lista di interi."""
+    out = []
+    for pezzo in str(spec).split(","):
+        pezzo = pezzo.strip()
+        if "-" in pezzo:
+            a, b = pezzo.split("-")
+            out.extend(range(int(a), int(b) + 1))
+        elif pezzo:
+            out.append(int(pezzo))
+    return out
+
+
+def grid_ns(semi=None):
+    """Griglia non stazionaria: 3 profili x 2 tassi x 2 L x 2 dep x N semi."""
     return [(pr, r, L, d, sd, bits_for(L), WINDOW)
             for pr, r, L, d, sd in itertools.product(
-                PROFILI, NS_RATES, NS_LENGTHS, NS_DEPOLS, SEEDS)]
+                PROFILI, NS_RATES, NS_LENGTHS, NS_DEPOLS,
+                semi if semi else NS_SEEDS)]
 
 
 def configure(length, depolar, seed):
@@ -281,11 +306,11 @@ def benchmark():
 # GENERAZIONE
 # =====================================================================
 
-def generate(smoke=False, workers=None, parallel=True, ns=False):
+def generate(smoke=False, workers=None, parallel=True, ns=False, semi=None):
     global OUT
     if ns:
         OUT = OUT_NS
-    tasks = grid_ns() if ns else grid(smoke=smoke)
+    tasks = grid_ns(semi) if ns else grid(smoke=smoke)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     state = {"writer": None, "written": 0, "vuote": 0, "incoerenti": 0}
@@ -363,6 +388,8 @@ if __name__ == "__main__":
     ap.add_argument("--benchmark", action="store_true")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--serial", action="store_true")
+    ap.add_argument("--semi", default=None,
+                    help="semi da generare, es. '1-15' o '6,7,8'; solo con --ns")
     ap.add_argument("--ns", action="store_true",
                     help="genera la griglia NON STAZIONARIA (profili "
                          "temporali) in data/qber_grid_ns.csv")
@@ -378,4 +405,4 @@ if __name__ == "__main__":
         benchmark()
     else:
         generate(smoke=a.smoke, workers=a.workers, parallel=not a.serial,
-                 ns=a.ns)
+                 ns=a.ns, semi=semi_da_spec(a.semi) if a.semi else None)

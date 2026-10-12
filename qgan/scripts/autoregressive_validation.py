@@ -238,6 +238,7 @@ def main():
         backend=BACKEND, cond_schema=SCHEMA,
         latent_hi=lh if isinstance(lh, list) else [lh],
         phi=PHI, sigma=SIGMA.tolist(), seed_base=SEED_BASE,
+        sigma_fonte="griglia rigenerata 16/09/2026",
     )
     fr = corsa.firma(config)
     gia = corsa.gia_presenti(a.out)
