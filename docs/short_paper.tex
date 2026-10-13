@@ -1,0 +1,230 @@
+\documentclass[10pt,conference,a4paper,twocolumn]{IEEEtran}
+
+% --- PACCHETTI FONDAMENTALI ---
+\usepackage[utf8]{inputenc}
+\usepackage[italic]{mathastext}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{hyperref}
+
+\begin{document}
+
+% --- TITOLO E AUTORI ---
+\title{Quantum Generative Adversarial Networks for Addressing Security Data Imbalance and Casual Attribution of QBER}
+
+\author{
+    \IEEEauthorblockN{Alfonso Zappia, Nicola Frugieri}
+    \IEEEauthorblockA{\textit{Studenti (Matr. NF22500012, 0522501966)} \\
+        \{a.zappia, n.frugieri\}@studenti.unisa.it}
+    \and
+    \IEEEauthorblockN{Franco Cirillo, Maria Caterina D'Aloia}
+    \IEEEauthorblockA{\textit{Tutor di Ricerca} \\
+        \{fracirillo, mdaloia\}@unisa.it}
+    \and
+    \IEEEauthorblockN{Christian Esposito}
+    \IEEEauthorblockA{\textit{Docente del Corso} \\
+        \textit{Dipartimento di Informatica} \\
+        c.esposito@unisa.it}
+}
+\date{Anno Accademico 2025/2026}
+
+
+\maketitle
+
+% --- ABSTRACT ---
+\begin{abstract}
+    Lo sbilanciamento dei dati rappresenta una sfida critica nella sicurezza informatica e nelle reti a Distribuzione di Chiavi Quantistiche (QKD), dove i rari attacchi avversari sono sommersi dal rumore operativo e dalle fluttuazioni fisiche del canale. In questo lavoro presentiamo un'architettura generativa avversaria quantistica ibrida (QGAN) sviluppata per la data augmentation e l'attribuzione causale degli errori tra i domini di Intrusion Detection System (IDS) e reti QKD simulate sul protocollo BB84. Il modello integra un generatore quantistico a 5 qubit basato sull'ansatz EfficientSU2 e condizionamento tramite data re-uploading, affiancato da un discriminatore classico Multi-Layer Perceptron (MLP) implementato in NumPy. La valutazione viene condotta su un dataset generato in ambiente NetSquid composto da 56.538 finestre temporali distribuite su 360 celle fisiche. L'analisi della baseline classica fissa un benchmark di Mean Absolute Error (MAE) pari a 0,1738 nelle valutazioni di generalizzazione fuori griglia (cell split / held-out), evidenziando un significativo degrado prestazionale rispetto ai casi interpolativi (MAE 0,1218). Vengono infine dettagliate le recenti revisioni architetturali della pipeline, tra cui l'allocazione del condizionamento a 8 ingressi e l'estensione del budget di addestramento a 5.400 step con convergenza guidata da MMD stratificata, ponendo le basi per la scomposizione causale dell'errore QBER tra attacco, rumore e rivelatore.
+\end{abstract}
+
+\begin{IEEEkeywords}
+    Quantum Machine Learning, QGAN, Quantum Key Distribution (QKD), Network Security, Causal Attribution, Data Augmentation.
+\end{IEEEkeywords}
+
+% --- SEZIONE 1: INTRODUZIONE ---
+\section{Introduzione e descrizione del problema}
+
+I dataset impiegati nell'ambito della sicurezza informatica e delle comunicazioni quantistiche
+soffrono di uno sbilanciamento strutturale marcato. Nelle reti tradizionali basate su sistemi
+per il rilevamento delle intrusioni (IDS), così come nelle infrastrutture a Distribuzione di Chiavi Quantistiche
+(QKD), il traffico benigno e il normale rumore operativo del canale dominano numericamente la
+quasi totalità delle osservazioni. Al contrario, le istanze legate ad attacchi informatici o a tentativi di intercettazione avversaria da parte di un eavesdropper (\textit{Eve}) costituiscono una frazione estremamente ridotta ed episodica dell'intero volume dei dati raccolti.
+Tale sbilanciamento delle classi compromette la capacità dei tradizionali algoritmi di apprendimento automatico, i quali tendono ad appiattirsi sulla classe maggioritaria; ciò garantisce elevate metriche complessive di accuratezza superficiale,
+ma comporta un tasso di rilevamento inaccettabilmente basso per le minacce reali. Sebbene tecniche classiche di sovracampionamento come SMOTE o ADASYN tentino di riequilibrare i dati, esse faticano a sintetizzare la complessa struttura non lineare e le correlazioni ad alta dimensionalità proprie delle osservabili quantistiche.
+Per superare tali limitazioni, il nostro progetto propone un'architettura generativa avversaria quantistica ibrida (QGAN) volta alla \textit{data augmentation} mirata della classe minoritaria.
+L'iniziativa si articola su due domini applicativi distinti ma strettamente interconnessi: la validazione su traffico di rete classico (IDS) e l'estensione a un ambiente QKD simulato sul protocollo BB84. Il progetto persegue tre obiettivi strategici fondamentali:
+\begin{itemize}
+    \item \textbf{O1 (Trasferibilità Architetturale)}: dimostrare la generalizzabilità e la stabilità di un'architettura quantistica condivisa tra contesti applicativi e domini di sicurezza eterogenei;
+    \item \textbf{O2 (Augmentation e Rilevamento)}: incrementare la precisione e la sensibilità dei classificatori a valle nella distinzione tra attacchi reali e fluttuazioni stocastiche del canale;
+    \item \textbf{O3 (Attribuzione Causale dell'Errore)}: scomporre analiticamente il tasso di errore sui bit quantistici ($\text{QBER}_{\text{OSS}}$) nelle sue componenti fisiche costitutive: \begin{equation} \text{QBER}_{\text{oss}} = \text{QBER}_{\text{attacco}} + \text{QBER}_{\text{rumore}} + \text{QBER}_{\text{rivelatore}} \end{equation} rappresentate dal vettore target delle frazioni causali \begin{equation} y = (f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}})\end{equation};
+\end{itemize}
+Tale scomposizione offre un prezioso strumento diagnostico e operativo per la gestione della rete,
+consentendo agli operatori di discriminare tempestivamente un guasto o degrado fisico
+dell'infrastruttura da un attacco malevolo effettivo, mantenendo al contempo inalterate
+le rigide soglie fisiche della sicurezza della chiave quantistica.
+
+
+
+% --- SEZIONE 2: ARCHITETTURA QGAN ---
+\section{Stato dell'Arte}
+
+L'applicazione di tecniche di apprendimento automatico alle comunicazioni quantistiche e alla sicurezza di rete ha registrato un crescente interesse negli ultimi anni, articolandosi lungo tre direttrici principali:
+
+\begin{itemize}
+    \item \textbf{Machine Learning per il Rilevamento in QKD:} Il monitoraggio delle reti quantistiche e l'individuazione di attacchi, definiti a partire dallo storico protocollo BB84 introdotto da Bennett e Brassard \cite{bb84}, hanno recentemente beneficiato dell'introduzione di modelli classici. Ad esempio, il lavoro di Lu et al. \cite{qkd_attack_ml} dimostra l'efficacia di classificatori basati sul machine learning nel rilevare la presenza di un eavesdropper. Tuttavia, tali approcci si limitano tipicamente a una classificazione binaria (dicotomica) o assumono condizioni stazionarie, rivelandosi insufficienti per la stima causale puntuale delle origini dell'errore su configurazioni di canale non viste in fase di addestramento (\textit{held-out}).
+
+    \item \textbf{QGAN nell'Era NISQ:} L'estensione del paradigma generativo avversario ai dispositivi quantistici (QGAN) ha aperto nuove prospettive per la sintesi di dati complessi. Come dimostrato da Zoufal, Lucchi e Woerner \cite{qgan_nisq}, è possibile sfruttare Circuiti Quantistici Parametrizzati (PQC) per apprendere e caricare fedelmente distribuzioni di probabilità arbitrarie. Rispetto alle architetture GAN puramente classiche, i generatori PQC riescono a mappare correlazioni ad alta dimensionalità e non lineari pur mantenendo un numero estremamente ridotto di parametri addestrabili.
+
+    \item \textbf{Data Augmentation e Trasferibilità:} Nel dominio della sicurezza classica, come analizzato nella survey di riferimento di Buczak e Guven \cite{ids_survey}, l'impiego del data mining e di tecniche classiche di sovracampionamento (come SMOTE) per bilanciare i dati nei sistemi Intrusion Detection (IDS) è ormai consolidato. Nonostante ciò, l'adozione di un'architettura QGAN condivisa capace di eseguire una \textit{data augmentation} simultanea e trasferibile tra domini di rete classici e quantistici — finalizzata alla scomposizione causale del QBER nelle sue componenti fondamentali ($f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}}$) — costituisce una frontiera di ricerca ancora inesplorata che questo lavoro intende colmare.
+\end{itemize}
+
+% --- SEZIONE: ARCHITETTURA DELLA QGAN IBRIDA ---
+\section{Architettura della QGAN Ibrida}
+L'architettura proposta si basa su un paradigma avversario ibrido quantistico-classico operante nel regime NISQ (\textit{Noisy Intermediate-Scale Quantum}). Il modello combina la capacità di rappresentazione ad alta dimensionalità di un circuito quantistico parametrizzato con la stabilità e la velocità di calcolo di una rete neurale classica.
+
+\subsection{Panoramica del Paradigma Ibrido}
+Nel modello QGAN, la componente generativa $G_\theta$ e quella discriminativa $D_\phi$ competono in un gioco avversario a somma zero (\textit{minimax}). Il generatore quantistico trasforma un vettore di rumore casuale $z$ e un vettore di condizionamento fisico $c$ in campioni sintetici continuo-valutati $\hat{x}$, con l'obiettivo di imitare la distribuzione reale dei dati $p_{\text{data}}(x|c)$. Il discriminatore classico riceve sia campioni reali che sintetici e stima la probabilità che un dato provenga dalla distribuzione autentica. Il problema di ottimizzazione è espresso dalla funzione obiettivo:
+\begin{equation}
+    \begin{split}
+        \min_\theta \max_\phi V(D_\phi, G_\theta) = {} & \mathbb{E}_{x \sim p_{\text{data}}}[\log D_\phi(x|c)]        \\
+                                                       & + \mathbb{E}_{z \sim p_z}[\log(1 - D_\phi(G_\theta(z|c)|c))]
+    \end{split}
+\end{equation}
+
+\subsection{Generatore Quantistico ($G_\theta$)}
+Il generatore $G_\theta$ è implementato come un Circuito Quantistico Parametrizzato (PQC) in \textbf{Qiskit 2.5.2}, eseguito tramite il backend di simulazione ad alta intensità \textbf{Qiskit Aer} strutturato su $N=5$ qubit, in cui ciascun qubit è mappato direttamente su una delle 5 osservabili fisiche del sistema ($\text{QBER}_{\text{tot}}$, $\text{QBER}_X$, $\text{QBER}_Z$, asimmetria delle basi, tasso di sifting/loss).
+\begin{itemize}
+    \item \textbf{Encoding del Latente:} Un vettore di rumore casuale $z \sim \mathcal{U}(-r, r)$ viene codificato mediante rotazioni individuali $RY(z_i)$ su ciascun qubit. Il raggio latente $r$ è calibrato analiticamente ($r=0{,}82$ per il dominio QKD) per rispecchiare la dispersione condizionale delle osservabili.
+    \item \textbf{Ansatz Quantistico:} L'evoluzione dello stato adotta l'ansatz \texttt{EfficientSU2} con 4 ripetizioni (\textit{reps}=4) ed entanglement lineare tra qubit adiacenti, gestendo un totale di 50 parametri addestrabili $\theta$.
+    \item \textbf{Condizionamento e Data Re-uploading:} Le variabili fisiche ambientali $c$ (di dimensione $d_c \le 8$) sono iniettate tramite rotazioni $RZ(\pi \cdot c)$. Per prevenire il decadimento dei gradienti lungo il circuito, si adotta uno schema di \textit{data re-uploading} a due strati: il primo posizionato subito dopo l'encoding del latente e il secondo a metà dell'ansatz. In modalità autoregressiva ($d_c=8$), l'allocazione degli angoli sfrutta uno schema multilivello per garantire la piena visibilità dello stato storico della fibra.
+    \item \textbf{Estrazione delle Osservabili:} L'output continuo $\hat{x}_i \in [0, 1]$ viene ottenuto misurando la probabilità marginale dello stato $|1\rangle$ su ciascun qubit $i \in \{1, \dots, 5\}$.
+\end{itemize}
+
+\subsection{Discriminatore Classico ($D_\phi$)}
+Il discriminatore $D_\phi$ è strutturato come un Perceptron Multilivello (MLP) con topologia $5 + d_c \rightarrow 32 \rightarrow 16 \rightarrow 1$, implementato in NumPy puro. La scelta di un'implementazione classica priva di framework pesanti risponde a due esigenze fondamentali: azzerare l'overhead computazionale durante le iterazioni e consentire il calcolo analitico esatto della matrice Jacobiana del discriminatore rispetto agli ingressi:
+\begin{equation}
+    J_D = \frac{\partial D_\phi(\hat{x}|c)}{\partial \hat{x}}
+\end{equation}
+I layer nascosti impiegano funzioni di attivazione LeakyReLU ($\alpha = 0{,}01$), mentre il neurone di uscita adotta un'attivazione sigmoidale per restituire la probabilità di autenticità del campione.
+
+\subsection{Ottimizzazione Avversaria e Criteri di Convergenza}
+L'aggiornamento dei parametri del circuito quantistico $\theta$ avviene mediante retropropagazione dei gradienti concatenando la Jacobiana analitica del discriminatore $J_D$ con la \textit{Parameter-Shift Rule} applicata ai singoli gate del PQC:
+\begin{equation}
+    \frac{\partial G_\theta^i}{\partial \theta_j} = \frac{1}{2} \left[ G_{\theta + \frac{\pi}{2} e_j}^i - G_{\theta - \frac{\pi}{2} e_j}^i \right]
+\end{equation}
+Entrambe le componenti vengono ottimizzate tramite l'algoritmo Adam. Per evitare l'interruzione prematura rilevata nelle prime calibrazioni a 1.350 step, il budget di addestramento è stato esteso a $\text{max\_steps} = 5400$. La convergenza viene monitorata in tempo reale calcolando la \textit{Maximum Mean Discrepancy} (MMD) stratificata sulle condizioni di canale $c$, attivando l'arresto precoce (\textit{early stopping}) quando la distanza tra la distribuzione reale e quella sintetica si stabilizza (tipicamente tra i 2.900 e i 3.400 step).
+
+
+\section{Setup Sperimentale e Generazione dei Dataset}
+
+La validazione empirica dell'architettura proposta si articola su due domini applicativi distinti: il dominio quantistico, basato su una simulazione ad alta fedeltà di una rete QKD, e il dominio classico di Intrusion Detection Systems (IDS).
+
+\subsection{Ambiente di Simulazione QKD e Protocollo BB84}
+La simulazione del canale quantistico è realizzata mediante il framework \texttt{NetSquid}, modellando una linea di trasmissione in fibra ottica tra due nodi (Alice e Bob) che eseguono il protocollo di distribuzione delle chiavi BB84 con stati a singolo fotone. Il canale fisico è soggetto a perdite di attenuazione (dB/km) e a rumore depolarizzante stocastico. Un potenziale attaccante (Eve) intercetta il canale eseguendo un attacco di tipo \textit{Intercept-Resend} con probabilità di intercettazione $I_e \in [0{,}0, 1{,}0]$.
+
+Durante la trasmissione, il modulo \texttt{PerformanceTracker} misura continuamente le metriche operative aggregate su finestre temporali stazionarie. Per compensare l'attenuazione naturale della fibra sulle distanze maggiori ed evitare lo svuotamento statistico del campione, la dimensione del blocco di bit inviati da Alice adotta un meccanismo di scaling dinamico.
+
+\subsection{Struttura della Griglia a 360 Celle e Dataset}
+Il dataset QKD (\texttt{qber\_grid.csv}) viene generato attraverso uno \textit{sweep} esaustivo su una griglia di \textbf{360 celle fisiche}, individuate dalle combinazioni trasversali dei seguenti parametri di canale:
+\begin{itemize}
+    \item Lunghezza della fibra ottica $L \in [10, 80]\text{ km}$;
+    \item Tasso di depolarizzazione totale del canale $D_{\text{tot}} \in [0{,}00, 0{,}10]$;
+    \item Tasso di intercettazione dell'attaccante $I_e \in [0{,}00, 1{,}00]$.
+\end{itemize}
+
+Dalla simulazione completa sono estratte \textbf{56.538 finestre temporali}, ciascuna caratterizzata da un vettore di osservabili misurate $X \in \mathbb{R}^6$ e da un vettore target causale $y \in \mathbb{R}^3$:
+\begin{equation}
+    \begin{split}
+        X = \big[ & \text{QBER}_{\text{tot}},\, \text{QBER}_X,\, \text{QBER}_Z,                     \\
+                  & |\text{QBER}_X - \text{QBER}_Z|,\, \text{sift\_rate},\, \text{loss\_rate} \big]
+    \end{split}
+\end{equation}
+\begin{equation}
+    y = (f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}}), \quad \text{con } \sum_{i} f_i = 1{,}0
+\end{equation}
+dove le tre frazioni causali $f_i$ rappresentano la scomposizione esatta e nota dell'origine fisica dell'errore totale rilevato nel canale.
+
+\subsection{Dominio IDS e Vincolo di Feature Freezing (O1)}
+Per verificare l'obiettivo di trasferibilità architetturale (\textbf{O1}), il ramo classico della ricerca utilizza dataset benchmark di Intrusion Detection (quali NSL-KDD e CICIDS2017). A conclusione della Fase 1, la pipeline applica la procedura di \textit{Feature Freezing}, congelando una rappresentazione comune a dimensione fissa ($d = 5$ osservabili, estendibile a $d_c = 8$ con le condizioni ambientali) condivisa sia dal generatore quantistico che dal discriminatore classico su entrambi i domini. Tale vincolo garantisce che l'architettura QGAN non subisca modifiche strutturali nel passaggio dal contesto classico a quello quantistico.
+
+% --- SEZIONE 5: VALUTAZIONE DELLA BASELINE CLASSICA E RISULTATI FASE 1 ---
+\section{Valutazione della Baseline Classica e Risultati della Fase 1}
+Prima di procedere all'integrazione del generatore quantistico, la Fase 1 del progetto ha stabilito un benchmark di riferimento classico per la stima del vettore target delle frazioni causali $y = (f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}})$. Il modello adottato è un regressore d'insieme \textit{Multi-Output Random Forest} (100 alberi decisionali) addestrato sulle 6 osservabili fisiche misurate.
+
+\subsection{Protocolli di Valutazione Sperimentale}
+Per valutare la robustezza, la stabilità e la capacità di generalizzazione dell'attributore classico, sono stati definiti tre distinti protocolli di suddivisione del dataset (\textit{split}):
+\begin{enumerate}
+    \item \textbf{Random Split (80/20):} Suddivisione casuale dell'intero dataset ($56.538$ finestre temporali) per misurare la capacità pura del modello di interpolare all'interno della griglia di celle viste.
+    \item \textbf{Seed Split:} Addestramento condotto sulle finestre generate dai primi 4 semi casuali di simulazione e test effettuato esclusivamente sul 5° seme. Questo protocollo verifica la stabilità del regressore rispetto alle fluttuazioni stocastiche interne di \texttt{NetSquid}.
+    \item \textbf{Cell Split / Held-Out:} Esclusione dal training set di intere celle fisiche ($10.994$ finestre di test escluse contro $45.544$ di addestramento), definite da combinazioni uniche di lunghezza della fibra, depolarizzazione e tasso di intercettazione. Questo protocollo misura la capacità di generalizzazione su configurazioni di canale mai viste.
+\end{enumerate}
+
+\subsection{Risultati Empirici e Benchmark per RQ2}
+I risultati quantitativi in termini di Errore Medio Assoluto (MAE), sia complessivo che scomposizionale per le tre componenti causali, sono riassunti nella Tabella~\ref{tab:baseline_qkd}.
+
+\begin{table}[htbp]
+    \caption{Prestazioni dell'Attributore Baseline Classico sui Tre Protocolli (MAE)}
+    \label{tab:baseline_qkd}
+    \centering
+    \setlength{\tabcolsep}{3pt} % Riduce il padding orizzontale tra le colonne
+    \resizebox{\columnwidth}{!}{% Scala la tabella alla larghezza esatta della colonna
+        \begin{tabular}{lcccc}
+            \toprule
+            \textbf{Protocollo}            & \textbf{MAE Tot.} & \textbf{MAE ($f_{\text{att}}$)} & \textbf{MAE ($f_{\text{can}}$)} & \textbf{MAE ($f_{\text{riv}}$)} \\
+            \midrule
+            Random Split                   & 0{,}1218          & 0{,}1350                        & 0{,}1426                        & 0{,}0876                        \\
+            Seed Split                     & 0{,}1218          & 0{,}1349                        & 0{,}1413                        & 0{,}0892                        \\
+            \textbf{Cell Split (Held-Out)} & \textbf{0{,}1738} & \textbf{0{,}1907}               & \textbf{0{,}1918}               & \textbf{0{,}1389}               \\
+            \bottomrule
+        \end{tabular}%
+    }
+\end{table}
+L'analisi dei dati evidenzia due comportamenti fondamentali:
+\begin{itemize}
+    \item \textbf{Stabilità allo Stocastico:} L'uguaglianza perfetta tra Random Split ($\text{MAE} = 0{,}1218$) e Seed Split ($\text{MAE} = 0{,}1218$) dimostra che il regressore classico è insensibile alle fluttuazioni stocastiche di simulazione su celle note.
+    \item \textbf{Degrado di Generalizzazione (Benchmark RQ2):} Quando il modello è valutato su celle fisiche non viste (\textit{Cell Split}), l'errore medio complessivo subisce un incremento del \textbf{42{,}7\%}, passando da $0{,}1218$ a \textbf{0{,}1738}. L'errore si concentra principalmente nella stima della frazione di attacco ($f_{\text{attacco}} = 0{,}1907$) e del rumore di canale ($f_{\text{rumore}} = 0{,}1918$).
+\end{itemize}
+
+Il valore \textbf{$\text{MAE} = 0{,}1738$} rappresenta il \textbf{benchmark ufficiale per la domanda di ricerca RQ2}: esso stabilisce la soglia di errore che la \textit{data augmentation} condotta tramite la QGAN dovrà abbattere nelle Fasi 4 e 5.
+
+\subsection{Variante Classificatoria Binaria}
+Per consentire un confronto diretto con la letteratura esistente (es. arXiv:2608.04047), è stata implementata anche una variante classificatoria binaria (``Attacco SI / NO''). Un classificatore \textit{Random Forest} valutato su Random Split ha ottenuto un'\textbf{Accuracy del 90{,}34\%} e un \textbf{$F_1$-Score (macro) dell'82{,}44\%}. Il divario tra accuratezza e $F_1$-score conferma l'impatto dello sbilanciamento delle classi nelle condizioni di attacco debole confuse col rumore di fondo.
+
+
+% --- SEZIONE 4: BASELINE FASE 1 ---
+\section{Revisioni di sistema ed audit della pipeline}
+
+In seguito all'audit di sistema, la pipeline di addestramento e l'architettura della QGAN sono state sottoposte a un processo di revisione e ottimizzazione volta a garantire la riproducibilità sperimentale e la stabilità fisica del modello.
+
+\subsection{Correzioni Architetturali ed Encoding (Fix B.10 e B.11)}
+Durante l'audit sono state individuate e risolte due anomalie critiche riguardanti il calcolo delle osservabili e l'iniezione delle variabili di condizionamento:
+\begin{itemize}
+    \item \textbf{Encoding a 8 Ingressi in Autoregressivo (Fix B.11):} Nella generazione sequenziale ($d_c=8$), la versione iniziale del circuito quantistico soffriva di un difetto di troncamento, leggendo soltanto le prime 5 componenti di condizionamento $c[0:5]$. È stato implementato uno schema di allocazione multilivello che mappa tutte le 8 variabili dello stato storico sui gate $RZ(\pi \cdot c)$, garantendo al generatore quantistico una visibilità completa sulla dinamica temporale del canale.
+    \item \textbf{Normalizzazione delle Osservabili per Finestra (Fix B.10):} Il calcolo del \textit{sifting rate} e del \textit{loss rate} è stato riallineato alla singola finestra temporale anziché all'intera corsa di simulazione. Tale correzione ha abbattuto la disparità di dispersione artificiale tra le variabili da un valore sbilanciato di $47\times$ a una variazione fisica reale di $3\times$, stabilizzando le ampiezze dei gradienti durante la retropropagazione.
+\end{itemize}
+
+\subsection{Riproducibilità e Gestione dello Stato Iniziale}
+Per garantire il determinismo del modello nelle valutazioni multi-processo e prevenire fenomeni di deriva temporale, sono state introdotte due modifiche infrastrutturali:
+\begin{itemize}
+    \item \textbf{RNG Deterministico (Fix B.9):} L'hashing basato su stringhe per la generazione dei semi casuali è stato sostituito dall'adozione rigorosa di \texttt{numpy.random.SeedSequence} con identificatori numerici fissi.
+    \item \textbf{Inizializzazione Autoregressiva ($w_0$):} Nel primo passo della generazione sequenziale, lo stato iniziale $w_0$ è stato impostato sulla media empirica delle finestre di addestramento ($w_0 = \text{`media'}$). Questo intervento ha ridotto il rapporto di deriva transitoria iniziale dal $16{,}3\times$ al $3{,}7\times$.
+\end{itemize}
+
+\subsection{Estensione del Budget di Addestramento e Convergenza MMD}
+L'analisi delle curve di loss ha evidenziato che l'addestramento con limite a 1.350 step veniva interrotto prematuramente mentre la rete avversaria era ancora in fase di apprendimento attivo. Di conseguenza, il budget massimo è stato elevato a $\text{max\_steps} = 5400$.
+
+La convergenza viene controllata calcolando la \textit{Maximum Mean Discrepancy} (MMD) stratificata sulle condizioni di canale $c$. I test sperimentali mostrano che il punto di ottimo stazionario viene raggiunto in modo consistente tra i $2.900$ e i $3.400$ step, momento in cui interviene il meccanismo di \textit{early stopping}.
+
+\subsection{Esito dell'Audit di Fase 3 per il Ramo IDS}
+L'audit conclusivo della Fase 3 per il dominio classico (completato il 5 ottobre 2026) ha confermato l'efficacia del modello. La \textit{data augmentation} condotta tramite la QGAN sulle classi minoritarie dei dataset IDS ha prodotto un incremento statisticamente significativo del macro $F_1$-score dei classificatori a valle, superando nettamente le baseline classiche di oversampling (SMOTE e ADASYN) e validando l'ipotesi di trasferibilità architetturale (\textbf{O1}).
+
+% --- SEZIONE 6: CONCLUSIONI ---
+\section{Conclusion and Next Steps}
+This work establishes a solid foundation for quantum-assisted data augmentation and causal error attribution. The experimental baseline confirms that classical models struggle to generalise on unobserved quantum channel states ($\text{MAE} = 0.1738$). Current ongoing efforts (Phase 4 and Phase 5) focus on completing multi-seed QGAN training over the held-out QKD grid, evaluating whether quantum synthetic augmentation successfully degrades the attribution MAE below the classical benchmark.
+
+% --- BIBLIOGRAFIA ---
+\bibliographystyle{IEEEtran}
+\bibliography{bibliografia}
+\end{document}
