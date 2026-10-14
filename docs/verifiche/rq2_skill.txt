@@ -1,0 +1,22 @@
+20 corse, 8 celle distinte, 80 osservazioni   quantita': skill
+celle: [21, 22, 25, 26, 37, 38, 41, 42]
+ricorrenze per cella: min 3 max 15
+
+DECOMPOSIZIONE DELLA VARIANZA
+  fra corse    0.041323    16.4%
+  fra celle    0.138652    54.9%
+  residuo      0.072642    28.8%
+  La componente dominante dice su cosa conviene spendere repliche.
+
+MEDIA +0.2443
+UNITA' DI INFERENZA          intervallo 95%        ampiezza
+  per corsa  (nuove esecuzioni)  [+0.1537, +0.3265]  0.1728 
+  per cella  (nuove celle)       [+0.0625, +0.4134]  0.3510 
+  incrociata (entrambe)          [+0.0173, +0.4329]  0.4157 
+
+TEST DEI SEGNI sulle medie per corsa, contro +0.0000
+  18/20 corse sopra il riferimento   p = 0.00040
+  p minimo ottenibile con 20 corse: 0.00000 — e' il pavimento del test, non l'ampiezza dell'effetto.
+
+L'intervallo INCROCIATO e' quello da riportare: gli altri due tengono
+fisso un asse e sottostimano l'incertezza di una conclusione generale.

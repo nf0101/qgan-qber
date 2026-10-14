@@ -1,0 +1,48 @@
+dataset : 94,170 righe
+feature : ['qber', 'qber_rect', 'qber_diag', 'sift_rate', 'loss_rate']  (5, SPEC-FASE2 §1.2)
+escluse : ['basis_asymmetry', 'qber_stability']
+          basis_asymmetry: SPEC §1.4: ridondante, |qber_rect - qber_diag|
+          qber_stability: SPEC §1.4: verificata, nessun contributo marginale
+target  : ['f_eve', 'f_canale', 'f_rivelatore']
+celle   : ['intercept_rate', 'length_km', 'depolar_total'], seme 'seed'
+config. fisiche: 120, semi [1, 2, 3, 4, 5]
+
+MODALITA' FINALE: incluso il seme 5
+
+celle interne 24, di bordo 96, ripetizioni 15
+
+protocollo modello              MAE   banale            skill
+-------------------------------------------------------------
+random     rf       0.0856±0.0006   0.1965    0.564±0.003
+random     hgb      0.1060±0.0005   0.1965    0.460±0.003
+random     ridge    0.1446±0.0005   0.1965    0.264±0.003
+
+seed       rf       0.1174±0.0018   0.1966    0.403±0.008
+seed       hgb      0.1117±0.0018   0.1966    0.432±0.007
+seed       ridge    0.1448±0.0016   0.1966    0.264±0.005
+
+interior   rf       0.0725±0.0126   0.1365    0.467±0.098
+interior   hgb      0.0952±0.0141   0.1365    0.299±0.114
+interior   ridge    0.1211±0.0112   0.1365    0.108±0.108
+
+boundary   rf       0.1002±0.0083   0.2079    0.516±0.042
+boundary   hgb      0.1228±0.0098   0.2079    0.407±0.050
+boundary   ridge    0.1572±0.0098   0.2079    0.242±0.043
+
+Skill per componente (rf):
+protocollo          f_eve       f_canale   f_rivelatore
+random              0.646          0.449          0.553
+seed                0.535          0.265          0.316
+interior            0.492          0.401          0.505
+boundary            0.597          0.392          0.523
+
+Variante binaria (celle non estreme salvo 'intercept_rate': 36):
+  accuracy 0.9269 ± 0.0214  (banale 0.8148)
+  F1 macro 0.8708 ± 0.0274  precision 0.9397  recall 0.9725
+
+risultati in results/attributor_final.json
+
+Skill: 0 = come la media del training, 1 = predizione perfetta.
+Il divario fra 'random' e 'interior' e' lo spazio per RQ2.
+Se i tre modelli degradano allo stesso modo su 'interior', il
+limite e' del problema e non del modello.

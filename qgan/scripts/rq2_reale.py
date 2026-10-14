@@ -50,6 +50,11 @@ CONDIZIONI = ["intercept_rate", "length_km", "depolar_total"]
 
 SEED_BASE = 4100
 LATENT_HI = 0.8200          # B.2, ricalibrato sulla griglia rigenerata
+# Riusa un campione solo per cella fra media, MMD e MMD ricentrata.
+# Cambia il numero di estrazioni, quindi i numeri non sono confrontabili
+# con una corsa senza il flag: sta in `config`, la firma lo distingue.
+RICENTRA = False
+
 LATENT_HI_UNCOND = np.pi    # B.5: il ramo non condizionato usa il proprio
 
 FROZEN = dict(
@@ -167,8 +172,17 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
         Xh = Xs[m]
         ch = Cs[m][0]
         mu_vero = Xh.mean(axis=0)
-        mu_cond = cond.sample(n_gen, ch).mean(axis=0)
-        mu_unc = uncond.sample(n_gen).mean(axis=0)
+        if RICENTRA:
+            # Un campione solo per ramo: media e MMD devono riferirsi allo
+            # STESSO oggetto, altrimenti ricentrarlo non misura niente.
+            X_cond = cond.sample(n_gen, ch)
+            X_unc = uncond.sample(n_gen)
+            mu_cond, mu_unc = X_cond.mean(axis=0), X_unc.mean(axis=0)
+        else:
+            # Due estrazioni, nell'ordine originale: file bit-identico.
+            X_cond = X_unc = None
+            mu_cond = cond.sample(n_gen, ch).mean(axis=0)
+            mu_unc = uncond.sample(n_gen).mean(axis=0)
         mu_lin = np.asarray(interp_lin(ch[None, :]))[0]
         if not np.all(np.isfinite(mu_lin)):      # fuori dall'inviluppo
             mu_lin = np.asarray(interp_vic(ch[None, :]))[0]
@@ -190,6 +204,36 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
         X_lin = np.clip(X_vic + (mu_lin - X_vic.mean(axis=0)), 0.0, 1.0)
         X_ban = Xt[rng_diag.choice(len(Xt), n_gen, replace=False)]
 
+        if RICENTRA:
+            # Il ricentraggio inietta la sola media vera e lascia intatto
+            # tutto il resto: se la MMD crolla, la forma era giusta.
+            extra = {
+                "mmd_condizionato_ricentrato": float(metrics.mmd_rbf(
+                    Xh, np.clip(X_cond + (mu_vero - mu_cond), 0.0, 1.0),
+                    sigma=sig)),
+                "mmd_incondizionato_ricentrato": float(metrics.mmd_rbf(
+                    Xh, np.clip(X_unc + (mu_vero - mu_unc), 0.0, 1.0),
+                    sigma=sig)),
+                # Le finestre VERE della cella adiacente sulla stessa
+                # media vera: l'unico confronto di sola forma, perche'
+                # riceve l'identica iniezione del campione generato.
+                # E' anche `lineare` con l'errore di interpolazione
+                # azzerato, cioe' il miglior stimatore geometrico.
+                "mmd_vicino_ricentrato": float(metrics.mmd_rbf(
+                    Xh,
+                    np.clip(X_vic + (mu_vero - X_vic.mean(axis=0)),
+                            0.0, 1.0),
+                    sigma=sig)),
+            }
+        else:
+            # Le due estrazioni della MMD restano QUI, dopo i prelievi di
+            # rng_diag, come nell'originale: l'ordine e' preservato.
+            X_cond = cond.sample(n_gen, ch)
+            X_unc = uncond.sample(n_gen)
+            extra = {}
+        mmd_c = float(metrics.mmd_rbf(Xh, X_cond, sigma=sig))
+        mmd_u = float(metrics.mmd_rbf(Xh, X_unc, sigma=sig))
+
         per_cella.append({
             "cella": int(i),
             "condizione": [float(x) for x in k],
@@ -199,10 +243,9 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
             "mae_banale": float(np.abs(mu_banale - mu_vero).mean()),
             "mae_vicino": float(np.abs(mu_vic - mu_vero).mean()),
             "mae_lineare": float(np.abs(mu_lin - mu_vero).mean()),
-            "mmd_condizionato": float(metrics.mmd_rbf(
-                Xh, cond.sample(n_gen, ch), sigma=sig)),
-            "mmd_incondizionato": float(metrics.mmd_rbf(
-                Xh, uncond.sample(n_gen), sigma=sig)),
+            "mmd_condizionato": mmd_c,
+            "mmd_incondizionato": mmd_u,
+            **extra,
             "mmd_vicino": float(metrics.mmd_rbf(Xh, X_vic, sigma=sig)),
             "mmd_lineare": float(metrics.mmd_rbf(Xh, X_lin, sigma=sig)),
             "mmd_banale": float(metrics.mmd_rbf(Xh, X_ban, sigma=sig)),
@@ -232,9 +275,32 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
         "skill_vs_lineare": float(skill("mae_lineare")),
         # Sul compito DISTRIBUZIONALE, che e' quello che un generatore fa
         "mmd_condizionato_m": agg("mmd_condizionato") / len(per_cella),
+        "mmd_incondizionato_m": agg("mmd_incondizionato") / len(per_cella),
         "mmd_vicino_m": agg("mmd_vicino") / len(per_cella),
         "mmd_lineare_m": agg("mmd_lineare") / len(per_cella),
         "mmd_banale_m": agg("mmd_banale") / len(per_cella),
+        **({
+            "mmd_condizionato_ricentrato_m":
+                agg("mmd_condizionato_ricentrato") / len(per_cella),
+            "mmd_incondizionato_ricentrato_m":
+                agg("mmd_incondizionato_ricentrato") / len(per_cella),
+            "mmd_vicino_ricentrato_m":
+                agg("mmd_vicino_ricentrato") / len(per_cella),
+            # Quanto del deficit del condizionato era errore di media:
+            # 0 = niente, 1 = tutto. NON e' limitato superiormente a 1.
+            # La MMD^2 e' stimata con una U-statistica non distorta, che
+            # diventa negativa quando la MMD vera e' zero: se il
+            # ricentraggio porta la nuvola sul pavimento di rumore,
+            # l'aggregato ricentrato puo' essere negativo e la quota
+            # supera 1. Non e' un errore ed e' la conferma piu' netta
+            # possibile dell'ipotesi; ma in quel caso il numero non si
+            # legge come una frazione, si legge come "il ricentraggio ha
+            # esaurito il divario" e si riporta la MMD ricentrata grezza
+            # accanto a quella di `lineare`.
+            "quota_media": float(
+                1.0 - agg("mmd_condizionato_ricentrato")
+                / max(agg("mmd_condizionato"), 1e-12)),
+        } if RICENTRA else {}),
         "skill_mmd_vs_banale": float(
             1.0 - agg("mmd_condizionato") / max(agg("mmd_banale"), 1e-12)),
         "skill_mmd_vs_vicino": float(
@@ -280,11 +346,20 @@ def main():
                          "(default: tutte). Le escluse non cambiano: serve "
                          "a trovare la densita' alla quale la QGAN supera "
                          "l'interpolazione")
+    ap.add_argument("--ricentra", action="store_true",
+                    help="riusa un campione solo per cella e aggiunge la "
+                         "MMD del campione ricentrato sulla media vera. "
+                         "Separa errore di media ed errore di forma. "
+                         "Cambia il flusso casuale: scrivere su un file "
+                         "proprio, la firma lo distingue da sola")
     ap.add_argument("--backend", default="denso", choices=["denso", "aer"])
     ap.add_argument("--verbose", type=int, default=0)
     ap.add_argument("--forza", action="store_true")
     ap.add_argument("--out", default="results/rq2_reale.jsonl")
     a = ap.parse_args()
+
+    global RICENTRA
+    RICENTRA = a.ricentra
 
     config = dict(FROZEN, steps=a.steps, dati=a.dati,
                   quota_escluse=a.quota_escluse, backend=a.backend,
@@ -292,6 +367,13 @@ def main():
                   latent_hi=LATENT_HI, latent_hi_uncond=float(LATENT_HI_UNCOND),
                   osservabili=OSSERVABILI, condizioni=CONDIZIONI,
                   seed_base=SEED_BASE)
+    if a.ricentra:
+        # Entra in `config` SOLO quando e' attivo. Cosi' una corsa senza
+        # il flag conserva la firma delle corse precedenti — che e' il
+        # punto: senza il flag non cambia niente, e i record non devono
+        # separarsi per un parametro che non ha avuto effetto. Con il
+        # flag la firma cambia, e i due protocolli non si mescolano.
+        config["ricentra"] = True
     fr = corsa.firma(config)
     gia = corsa.gia_presenti(a.out)
     print(f"configurazione {fr}   codice {corsa.versione_codice()}")
@@ -327,6 +409,20 @@ def main():
         print(f"  SKILL MMD vs banale {r['skill_mmd_vs_banale']:+.4f}   "
               f"vs vicino {r['skill_mmd_vs_vicino']:+.4f}   "
               f"vs lineare {r['skill_mmd_vs_lineare']:+.4f}", flush=True)
+        if a.ricentra:
+            print(f"  RICENTRATA  cond {r['mmd_condizionato_m']:.5f}"
+                  f" -> {r['mmd_condizionato_ricentrato_m']:.5f}"
+                  f"   incond {r['mmd_incondizionato_m']:.5f}"
+                  f" -> {r['mmd_incondizionato_ricentrato_m']:.5f}"
+                  f"   quota di media {r['quota_media']:.3f}", flush=True)
+            print(f"  SOLA FORMA  cond ricentrato "
+                  f"{r['mmd_condizionato_ricentrato_m']:.5f}  contro "
+                  f"vicino ricentrato {r['mmd_vicino_ricentrato_m']:.5f}"
+                  f"   (stessa media iniettata: resta solo la forma)",
+                  flush=True)
+            print(f"  per scala: lineare {r['mmd_lineare_m']:.5f}, che e' il "
+                  f"vicino sulla media INTERPOLATA — non confrontabile col "
+                  f"ricentrato, che riceve quella vera.", flush=True)
         print(f"  incond {r['skill_incondizionato']:+.4f}   "
               f"c/z {k['c_su_z_iniziale']:.3f}->{k['c_su_z_finale']:.3f}   "
               f"passo {k['best_step']}/{a.steps}", flush=True)

@@ -1,0 +1,45 @@
+quantita' skill   riferimento raggi_unico
+  20 corse, 8 celle, 80 osservazioni
+
+LIVELLI  media su tutte le osservazioni del gruppo
+  raggi_unico              +0.2667   20 corse, 8 celle
+  raggi_perfeature         +0.2841   20 corse, 8 celle
+  raggi_misto              +0.2531   20 corse, 8 celle
+
+==================================================================
+CONTRASTI APPAIATI   ogni gruppo meno raggi_unico
+==================================================================
+
+raggi_perfeature - raggi_unico
+  80 coppie appaiate su 20 corse e 8 celle
+  media su tutte le osservazioni   +0.0173
+  varianza della differenza: fra corse 37.9%   fra celle 11.8%   residuo 50.4%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per corsa                    [-0.0721, +0.1129]  0.1850   contiene lo zero
+    per cella                    [-0.0783, +0.1057]  0.1840   contiene lo zero
+    incrociata                   [-0.1258, +0.1701]  0.2959   contiene lo zero
+  segni sulle medie per corsa      11/20   p = 0.82380
+
+raggi_misto - raggi_unico
+  80 coppie appaiate su 20 corse e 8 celle
+  media su tutte le osservazioni   -0.0136
+  varianza della differenza: fra corse 34.1%   fra celle 26.9%   residuo 39.0%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per corsa                    [-0.1074, +0.0955]  0.2029   contiene lo zero
+    per cella                    [-0.0971, +0.0439]  0.1410   contiene lo zero
+    incrociata                   [-0.1523, +0.1276]  0.2799   contiene lo zero
+  segni sulle medie per corsa      8/20   p = 0.50344
+
+==================================================================
+RIEPILOGO   differenza da raggi_unico, intervallo incrociato
+==================================================================
+  gruppo                       media          intervallo 95%    segni         p
+  raggi_perfeature           +0.0173  [ -0.1258,  +0.1701]   11/20    0.82380  *
+  raggi_misto                -0.0136  [ -0.1523,  +0.1276]    8/20    0.50344  *
+
+  * l'intervallo incrociato contiene lo zero: su nuove corse e
+    nuove celle la differenza non e' distinguibile.
+
+  La differenza elimina l'effetto della cella, che nei livelli e'
+  la componente dominante: per questo i contrasti appaiati sono
+  molto piu' precisi del confronto fra le medie dei gruppi.

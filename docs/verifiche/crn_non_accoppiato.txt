@@ -1,0 +1,57 @@
+accoppiamento delle misure: DISATTIVATO
+API ns.set_random_state: trovata
+
+==================================================================
+1. STABILITA' DEI FLUSSI FRA PROCESSI
+==================================================================
+  eve:10               88053906      88053906   uguale
+  det:10             1156697690    1156697690   uguale
+  depol_s1:7          880097667     880097667   uguale
+  bob_meas:3         2634757919    2634757919   uguale
+
+  esito: STABILE
+
+==================================================================
+2. COERENZA FRA ERRORE ANALITICO E OSSERVATO
+==================================================================
+  Dove Eve non intercetta la catena e' deterministica dati i Pauli
+  e det_flip: le discordanze devono essere ESATTAMENTE zero.
+
+  r=0.00  QBER   1.81%   discordanze     0/1214    (0.00%)
+  r=0.25  QBER   8.15%   discordanze     0/915     (0.00%)
+  r=0.50  QBER  12.69%   discordanze     0/623     (0.00%)
+  r=1.00  QBER  24.46%   discordanze     0/0       (nan%)
+
+  esito: COERENTE
+
+==================================================================
+3. ACCOPPIAMENTO FRA CONDIZIONI
+==================================================================
+  Due corse, r=0.25 e r=0.5. Le intercettazioni sono nidificate:
+  sulle posizioni intercettate in ENTRAMBE, esito di Eve, Pauli e
+  esito di Bob devono coincidere. Se le misure non sono
+  accoppiate divergeranno su circa meta'.
+
+  posizioni setacciate in comune: 1214
+  Pauli del canale divergenti :     0/1214
+  flip del rivelatore diverg. :     0/1214
+
+  intercettate in ENTRAMBE     : 299
+  intercettate solo a r=0.5    : 292  (nidificazione: atteso > 0)
+
+  esito di Bob divergente      :    87/299  (29.1%)
+
+  esito: NON ACCOPPIATO. La divergenza vicina al 50% e' la
+  firma di una misura che pesca da un flusso non controllato:
+  le due corse non condividono i numeri casuali dove il QBER
+  da intercettazione si genera. I controfattuali di O3 non
+  poggiano sulla proprieta' che il modulo dichiara.
+
+==================================================================
+  stabilita'       OK
+  coerenza         OK
+  accoppiamento    FALLITA
+==================================================================
+Almeno una proprieta' non regge. Va deciso con Alfonso se
+investire sull'accoppiamento delle misure o se separare O3
+dalla rivendicazione principale.

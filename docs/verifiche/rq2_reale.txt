@@ -1,0 +1,99 @@
+1 corse, 12 celle, 12 osservazioni
+campi disponibili: cella, condizione, mae_banale, mae_condizionato, mae_incondizionato, mae_lineare, mae_vicino, mmd_banale, mmd_condizionato, mmd_incondizionato, mmd_lineare, mmd_vicino, n_finestre
+
+====================================================================
+FAMIGLIA MAE   riferimento mae_condizionato
+====================================================================
+  livelli medi:  mae_condizionato 0.04227
+                 mae_banale 0.13948
+                 mae_incondizionato 0.15179
+                 mae_lineare 0.00305
+                 mae_vicino 0.05953
+
+  Segno: POSITIVO = mae_condizionato migliore (per mae il minore vince).
+
+  mae_banale - mae_condizionato   (12 coppie)
+    media +0.09721   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [+0.09721, +0.09721]
+      per cella      [+0.06745, +0.12644]
+      incrociata     [+0.06745, +0.12644]
+    segni per corsa  1/1   p = 1.00000
+
+  mae_incondizionato - mae_condizionato   (12 coppie)
+    media +0.10951   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [+0.10951, +0.10951]
+      per cella      [+0.07496, +0.14549]
+      incrociata     [+0.07496, +0.14549]
+    segni per corsa  1/1   p = 1.00000
+
+  mae_lineare - mae_condizionato   (12 coppie)
+    media -0.03923   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [-0.03923, -0.03923]
+      per cella      [-0.05235, -0.02729]
+      incrociata     [-0.05235, -0.02729]
+    segni per corsa  0/1   p = 1.00000
+
+  mae_vicino - mae_condizionato   (12 coppie)
+    media +0.01726   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [+0.01726, +0.01726]
+      per cella      [-0.00522, +0.03759]   contiene lo zero
+      incrociata     [-0.00522, +0.03759]   contiene lo zero
+    segni per corsa  1/1   p = 1.00000
+
+  RIEPILOGO mae   positivo = mae_condizionato vince
+    stimatore                   media            intervallo 95%    segni
+    mae_incondizionato       +0.10951  [ +0.07496,  +0.14549]    1/1  
+    mae_banale               +0.09721  [ +0.06745,  +0.12644]    1/1  
+    mae_vicino               +0.01726  [ -0.00522,  +0.03759]    1/1    *
+    mae_lineare              -0.03923  [ -0.05235,  -0.02729]    0/1  
+    * intervallo incrociato che contiene lo zero: su nuove
+      corse e nuove celle i due stimatori non si distinguono.
+
+====================================================================
+FAMIGLIA MMD   riferimento mmd_condizionato
+====================================================================
+  livelli medi:  mmd_condizionato 0.06710
+                 mmd_banale 0.34865
+                 mmd_incondizionato 0.34244
+                 mmd_lineare 0.00166
+                 mmd_vicino 0.14599
+
+  Segno: POSITIVO = mmd_condizionato migliore (per mmd il minore vince).
+
+  mmd_banale - mmd_condizionato   (12 coppie)
+    media +0.28155   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [+0.28155, +0.28155]
+      per cella      [+0.22776, +0.33243]
+      incrociata     [+0.22776, +0.33243]
+    segni per corsa  1/1   p = 1.00000
+
+  mmd_incondizionato - mmd_condizionato   (12 coppie)
+    media +0.27533   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [+0.27533, +0.27533]
+      per cella      [+0.16785, +0.38643]
+      incrociata     [+0.16785, +0.38643]
+    segni per corsa  1/1   p = 1.00000
+
+  mmd_lineare - mmd_condizionato   (12 coppie)
+    media -0.06544   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [-0.06544, -0.06544]
+      per cella      [-0.10785, -0.02859]
+      incrociata     [-0.10785, -0.02859]
+    segni per corsa  0/1   p = 1.00000
+
+  mmd_vicino - mmd_condizionato   (12 coppie)
+    media +0.07889   varianza: fra corse  nan%  fra celle  nan%  residuo  nan%
+      per corsa      [+0.07889, +0.07889]
+      per cella      [-0.00812, +0.16698]   contiene lo zero
+      incrociata     [-0.00812, +0.16698]   contiene lo zero
+    segni per corsa  1/1   p = 1.00000
+
+  RIEPILOGO mmd   positivo = mmd_condizionato vince
+    stimatore                   media            intervallo 95%    segni
+    mmd_banale               +0.28155  [ +0.22776,  +0.33243]    1/1  
+    mmd_incondizionato       +0.27533  [ +0.16785,  +0.38643]    1/1  
+    mmd_vicino               +0.07889  [ -0.00812,  +0.16698]    1/1    *
+    mmd_lineare              -0.06544  [ -0.10785,  -0.02859]    0/1  
+    * intervallo incrociato che contiene lo zero: su nuove
+      corse e nuove celle i due stimatori non si distinguono.
+

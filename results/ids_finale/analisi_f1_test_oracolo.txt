@@ -1,0 +1,346 @@
+20 corse   10 repliche   2 semi   metrica f1_test_oracolo (rf)
+repliche: ids_s101, ids_s202, ids_s303, ids_s404, ids_s42, ids_s505, ids_s606, ids_s707, ids_s808, ids_s909
+semi: [0, 1]
+celle piene della griglia replica x seme: 20/20
+
+======================================================================
+LIVELLI  media sulle repliche, deviazione FRA repliche
+======================================================================
+          variante     media  sd fra repl.       min       max
+        bilanciato    0.3781        0.0265    0.3619    0.4363
+      duplicazione    0.4023        0.0402    0.3619    0.4697
+         gaussiana    0.6011        0.0585    0.5171    0.7077
+     gaussiana_cov    0.6076        0.0784    0.5253    0.7590
+           nessuna    0.3932        0.0286    0.3619    0.4332
+              qgan    0.5524        0.0370    0.4866    0.6096
+          qgan_cov    0.6295        0.0533    0.5548    0.7421
+           qgan_sd    0.5309        0.0537    0.4380    0.6127
+            rumore    0.6366        0.0597    0.5572    0.7525
+      rumore_forte    0.6271        0.0373    0.5670    0.6709
+      rumore_lieve    0.5640        0.0811    0.4728    0.7087
+             smote    0.4888        0.0484    0.4169    0.5651
+    smote_distorta    0.4923        0.0197    0.4548    0.5280
+
+  La deviazione FRA repliche e' la quantita' che non si poteva
+  misurare con un solo split: dice quanto di cio' che si leggeva
+  come effetto del metodo era scelta dei 53 attacchi.
+
+======================================================================
+CONFRONTO OPERATIVO   ogni variante meno 'bilanciato'
+======================================================================
+
+duplicazione - bilanciato
+  media su tutte le corse        +0.0242
+  varianza della differenza: fra repliche 86.3%   fra semi  2.2%   residuo 11.5%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.0060, +0.0450]  0.0391
+    per seme                     [+0.0204, +0.0279]  0.0075
+    incrociata                   [+0.0055, +0.0470]  0.0415
+  segni sulle medie per replica  8/10 sopra +0.000   p = 0.1094
+    (pavimento del test con 10 repliche: 0.0020)
+
+gaussiana - bilanciato
+  media su tutte le corse        +0.2230
+  varianza della differenza: fra repliche 76.6%   fra semi  0.5%   residuo 22.8%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.1822, +0.2595]  0.0774
+    per seme                     [+0.2192, +0.2269]  0.0077
+    incrociata                   [+0.1782, +0.2623]  0.0841
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+gaussiana_cov - bilanciato
+  media su tutte le corse        +0.2295
+  varianza della differenza: fra repliche 91.7%   fra semi  1.2%   residuo  7.1%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.1809, +0.2790]  0.0981
+    per seme                     [+0.2228, +0.2363]  0.0135
+    incrociata                   [+0.1790, +0.2810]  0.1020
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+nessuna - bilanciato
+  media su tutte le corse        +0.0152
+  varianza della differenza: fra repliche 38.3%   fra semi  2.7%   residuo 59.0%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.0056, +0.0257]  0.0201
+    per seme                     [+0.0119, +0.0184]  0.0064
+    incrociata                   [+0.0015, +0.0304]  0.0289
+  segni sulle medie per replica  7/10 sopra +0.000   p = 0.3438
+    (pavimento del test con 10 repliche: 0.0020)
+
+qgan - bilanciato
+  media su tutte le corse        +0.1743
+  varianza della differenza: fra repliche 66.2%   fra semi  8.4%   residuo 25.4%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.1397, +0.2034]  0.0637
+    per seme                     [+0.1604, +0.1881]  0.0277
+    incrociata                   [+0.1332, +0.2139]  0.0808
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+qgan_cov - bilanciato
+  media su tutte le corse        +0.2514
+  varianza della differenza: fra repliche 89.5%   fra semi  0.0%   residuo 10.4%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.2105, +0.2907]  0.0802
+    per seme                     [+0.2505, +0.2523]  0.0018
+    incrociata                   [+0.2099, +0.2926]  0.0827
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+qgan_sd - bilanciato
+  media su tutte le corse        +0.1528
+  varianza della differenza: fra repliche 53.1%   fra semi 19.4%   residuo 27.6%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.1067, +0.1946]  0.0879
+    per seme                     [+0.1207, +0.1850]  0.0643
+    incrociata                   [+0.0797, +0.2147]  0.1350
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+rumore - bilanciato
+  media su tutte le corse        +0.2585
+  varianza della differenza: fra repliche 75.8%   fra semi  2.7%   residuo 21.5%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.2225, +0.2945]  0.0721
+    per seme                     [+0.2502, +0.2667]  0.0165
+    incrociata                   [+0.2207, +0.3023]  0.0816
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+rumore_forte - bilanciato
+  media su tutte le corse        +0.2490
+  varianza della differenza: fra repliche 43.9%   fra semi 18.5%   residuo 37.6%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.2266, +0.2692]  0.0426
+    per seme                     [+0.2323, +0.2657]  0.0335
+    incrociata                   [+0.2115, +0.2822]  0.0707
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+rumore_lieve - bilanciato
+  media su tutte le corse        +0.1859
+  varianza della differenza: fra repliche 94.5%   fra semi  0.5%   residuo  5.0%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.1452, +0.2317]  0.0865
+    per seme                     [+0.1824, +0.1895]  0.0072
+    incrociata                   [+0.1447, +0.2321]  0.0874
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+smote - bilanciato
+  media su tutte le corse        +0.1107
+  varianza della differenza: fra repliche 83.1%   fra semi  0.8%   residuo 16.0%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.0831, +0.1401]  0.0570
+    per seme                     [+0.1071, +0.1142]  0.0070
+    incrociata                   [+0.0801, +0.1421]  0.0619
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+smote_distorta - bilanciato
+  media su tutte le corse        +0.1142
+  varianza della differenza: fra repliche 62.0%   fra semi  5.1%   residuo 33.0%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.0966, +0.1295]  0.0330
+    per seme                     [+0.1085, +0.1199]  0.0114
+    incrociata                   [+0.0934, +0.1347]  0.0413
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+
+======================================================================
+ABLAZIONI CAUSALI   verso atteso dichiarato prima della misura
+======================================================================
+
+smote_distorta - smote   atteso -
+   SMOTE con le dispersioni della QGAN: se l'F1 crolla, la distorsione
+   e' causa e non sintomo
+  media su tutte le corse        +0.0035
+  varianza della differenza: fra repliche 68.1%   fra semi  0.3%   residuo 31.5%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [-0.0220, +0.0296]  0.0516   contiene lo zero
+    per seme                     [+0.0013, +0.0057]  0.0044
+    incrociata                   [-0.0258, +0.0322]  0.0581   contiene lo zero
+  segni sulle medie per replica  5/10 sopra +0.000   p = 1.0000
+    (pavimento del test con 10 repliche: 0.0020)
+  verso atteso NEGATIVO: NON confermato
+  MMD media   smote_distorta +0.1269   smote -0.0081  (~0)   differenza +0.1350
+  scarto covarianza   smote_distorta 0.7553   smote 0.4611
+
+qgan_sd - qgan   atteso +
+   QGAN con le dispersioni riportate a quelle reali: se l'F1 recupera,
+   la causa e' confermata dal verso opposto
+  media su tutte le corse        -0.0214
+  varianza della differenza: fra repliche 38.2%   fra semi 38.6%   residuo 23.2%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [-0.0564, +0.0186]  0.0750   contiene lo zero
+    per seme                     [-0.0675, +0.0246]  0.0920   contiene lo zero
+    incrociata                   [-0.0987, +0.0557]  0.1545   contiene lo zero
+  segni sulle medie per replica  3/10 sopra +0.000   p = 0.3438
+    (pavimento del test con 10 repliche: 0.0020)
+  verso atteso POSITIVO: NON confermato
+  MMD media   qgan_sd +0.4214   qgan +0.3903   differenza +0.0311
+  scarto covarianza   qgan_sd 0.5609   qgan 0.9151
+
+qgan_cov - qgan   atteso +
+   QGAN portata su media E covarianza reali. riscala corregge una
+   dispersione per volta e lascia intatte media e correlazioni,
+   quindi qgan_sd non era una correzione completa: questa lo e',
+   entro le trasformazioni affini
+  media su tutte le corse        +0.0771
+  varianza della differenza: fra repliche 70.2%   fra semi  8.3%   residuo 21.5%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.0434, +0.1141]  0.0706
+    per seme                     [+0.0624, +0.0918]  0.0295
+    incrociata                   [+0.0384, +0.1254]  0.0870
+  segni sulle medie per replica  10/10 sopra +0.000   p = 0.0020
+    (pavimento del test con 10 repliche: 0.0020)
+  verso atteso POSITIVO: confermato
+  MMD media   qgan_cov +0.1956   qgan +0.3903   differenza -0.1948
+  scarto covarianza   qgan_cov 0.0124   qgan 0.9151
+
+----------------------------------------------------------------------
+LETTURA  1/3 versi attesi confermati
+    smote_distorta - smote  +0.0035  atteso -  NO
+           qgan_sd - qgan   -0.0214  atteso +  NO
+          qgan_cov - qgan   +0.0771  atteso +  confermato
+
+  Nemmeno il verso negativo regge: l'ipotesi sulle
+  dispersioni non e' sostenuta da nessuna ablazione, e il
+  divario della QGAN va cercato altrove.
+----------------------------------------------------------------------
+
+======================================================================
+CONTROLLI   contrasti a due code, nessun verso atteso
+======================================================================
+
+qgan_cov - gaussiana_cov
+   il contrasto DECISIVO, e l'unico appaiato esattamente: le due nuvole
+   passano per la stessa mappa, quindi hanno media e covarianza
+   identiche cifra per cifra e differiscono SOLO per la struttura
+   oltre il second'ordine. Indistinguibile da zero = il circuito non
+   aggiunge niente a una gaussiana
+  media su tutte le corse        +0.0218
+  varianza della differenza: fra repliche 63.6%   fra semi  3.5%   residuo 32.9%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [-0.0076, +0.0466]  0.0542   contiene lo zero
+    per seme                     [+0.0142, +0.0295]  0.0153
+    incrociata                   [-0.0137, +0.0520]  0.0657   contiene lo zero
+  segni sulle medie per replica  7/10 sopra +0.000   p = 0.3438
+    (pavimento del test con 10 repliche: 0.0020)
+
+  LETTURA  il generatore non aggiunge nulla oltre i
+  momenti. Una gaussiana sui 53 reali fa lo stesso di
+  qgan_cov, quindi il +0.048 di qgan_cov su qgan e'
+  tutto dei momenti iniettati da ricolora e il
+  circuito non porta struttura utile. Va scritto
+  cosi': il risultato e' sulla calibrazione, non
+  sulla generazione.
+
+qgan_cov - gaussiana
+   la stessa domanda contro la gaussiana campionata, che ha i momenti
+   stimati e non esatti: qui un vantaggio di qgan_cov puo' venire
+   anche dall'esattezza dei momenti, non dal generatore
+  media su tutte le corse        +0.0283
+  varianza della differenza: fra repliche 52.3%   fra semi  1.3%   residuo 46.5%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [+0.0026, +0.0532]  0.0506
+    per seme                     [+0.0236, +0.0331]  0.0095
+    incrociata                   [-0.0043, +0.0592]  0.0636   contiene lo zero
+  segni sulle medie per replica  8/10 sopra +0.000   p = 0.1094
+    (pavimento del test con 10 repliche: 0.0020)
+
+qgan - gaussiana
+   la QGAN grezza contro il modello parametrico piu' semplice che usa
+   gli stessi 53 punti
+  media su tutte le corse        -0.0488
+  varianza della differenza: fra repliche 55.5%   fra semi  2.3%   residuo 42.2%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [-0.0907, -0.0106]  0.0800
+    per seme                     [-0.0588, -0.0388]  0.0200
+    incrociata                   [-0.1015, -0.0007]  0.1008
+  segni sulle medie per replica  4/10 sopra +0.000   p = 0.7539
+    (pavimento del test con 10 repliche: 0.0020)
+
+rumore_forte - rumore
+   0.30x contro 0.10x della dispersione media: con rumore_lieve nella
+   tabella dei livelli dice se c'e' un ottimo interno nella scala
+   della perturbazione
+  media su tutte le corse        -0.0095
+  varianza della differenza: fra repliche 48.4%   fra semi 22.0%   residuo 29.6%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per replica                  [-0.0412, +0.0206]  0.0618   contiene lo zero
+    per seme                     [-0.0344, +0.0155]  0.0499   contiene lo zero
+    incrociata                   [-0.0661, +0.0351]  0.1012   contiene lo zero
+  segni sulle medie per replica  5/10 sopra +0.000   p = 1.0000
+    (pavimento del test con 10 repliche: 0.0020)
+
+  Confronta questi con la tabella dei LIVELLI: se gaussiana sta
+  vicino a smote, il regime non premia nessun modello
+  generativo, e la sezione va impostata su questo.
+
+======================================================================
+MMD CONTRO UTILITA' A VALLE
+======================================================================
+  220 coppie (variante x corsa)
+  Spearman MMD vs f1_test_oracolo: rho = +0.076   p = 0.2618
+  La correlazione aggregata dice se la MMD ordina i REGIMI
+  (nuvole da ricampionamento contro nuvole generate). Non dice
+  se ha risoluzione dove serve scegliere: quello sta sotto.
+
+  RISOLUZIONE  5 varianti con MMD indistinguibile da zero:
+    duplicazione, rumore, rumore_forte, rumore_lieve, smote
+    escursione MMD 0.0100   escursione f1_test_oracolo 0.2343
+    Dentro questo gruppo la MMD e' cieca e la metrica
+    a valle no: per scegliere fra metodi buoni non
+    serve.
+
+  CONTROESEMPIO  duplicazione e rumore
+    MMD -0.0093  (~0) contro -0.0088  (~0)   differenza -0.0005
+    f1_test_oracolo 0.4023 contro 0.6366   divario 0.2343
+    Due nuvole che la MMD giudica equivalenti rendono in
+    modo diverso a valle. Il criterio di arresto della
+    QGAN lavora su differenze di questa scala.
+
+          variante    MMD media  scarto cov f1_test_oracolo
+      duplicazione -0.0093  (~0)      0.2603    0.4023
+         gaussiana      +0.1858      0.1519    0.6011
+     gaussiana_cov      +0.1843      0.0131    0.6076
+              qgan      +0.3903      0.9151    0.5524
+          qgan_cov      +0.1956      0.0124    0.6295
+           qgan_sd      +0.4214      0.5609    0.5309
+            rumore -0.0088  (~0)      0.2513    0.6366
+      rumore_forte +0.0007  (~0)      0.2019    0.6271
+      rumore_lieve -0.0091  (~0)      0.2897    0.5640
+             smote -0.0081  (~0)      0.4611    0.4888
+    smote_distorta      +0.1269      0.7553    0.4923
+
+  'scarto cov' e' lo scarto relativo di covarianza dai 53
+  reali, in norma di Frobenius: e' la quantita' che qgan_cov
+  manipola e che le dispersioni per feature non catturano.
+
+======================================================================
+RIEPILOGO   differenza da 'bilanciato', intervallo incrociato
+======================================================================
+          variante     media          intervallo 95%    segni        p
+            rumore   +0.2585  [ +0.2207,  +0.3023]   10/10    0.0020
+          qgan_cov   +0.2514  [ +0.2099,  +0.2926]   10/10    0.0020
+      rumore_forte   +0.2490  [ +0.2115,  +0.2822]   10/10    0.0020
+     gaussiana_cov   +0.2295  [ +0.1790,  +0.2810]   10/10    0.0020
+         gaussiana   +0.2230  [ +0.1782,  +0.2623]   10/10    0.0020
+      rumore_lieve   +0.1859  [ +0.1447,  +0.2321]   10/10    0.0020
+              qgan   +0.1743  [ +0.1332,  +0.2139]   10/10    0.0020
+           qgan_sd   +0.1528  [ +0.0797,  +0.2147]   10/10    0.0020
+    smote_distorta   +0.1142  [ +0.0934,  +0.1347]   10/10    0.0020
+             smote   +0.1107  [ +0.0801,  +0.1421]   10/10    0.0020
+      duplicazione   +0.0242  [ +0.0055,  +0.0470]    8/10    0.1094
+           nessuna   +0.0152  [ +0.0015,  +0.0304]    7/10    0.3438
+
+  * l'intervallo incrociato contiene lo zero: su nuove repliche e
+    nuove inizializzazioni la differenza non e' distinguibile.
+
+  Da riportare nel capitolo: media, intervallo INCROCIATO e il
+  numero di repliche (10), non le 20 corse.  I semi dentro una
+  replica condividono i dati e non sono repliche indipendenti
+  dello split.

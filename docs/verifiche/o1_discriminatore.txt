@@ -1,0 +1,57 @@
+quantita' skill   riferimento o1_qkd_h32_16
+  20 corse, 8 celle, 80 osservazioni
+
+LIVELLI  media su tutte le osservazioni del gruppo
+  o1_qkd_h32_16            +0.2667   20 corse, 8 celle
+  o1_qkd_h8                -0.0727   20 corse, 8 celle
+  o1_qkd_h16               +0.0717   20 corse, 8 celle
+  o1_qkd_h64_32            +0.3218   20 corse, 8 celle
+
+==================================================================
+CONTRASTI APPAIATI   ogni gruppo meno o1_qkd_h32_16
+==================================================================
+
+o1_qkd_h8 - o1_qkd_h32_16
+  80 coppie appaiate su 20 corse e 8 celle
+  media su tutte le osservazioni   -0.3395
+  varianza della differenza: fra corse 42.6%   fra celle 17.7%   residuo 39.8%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per corsa                    [-0.5106, -0.1815]  0.3292
+    per cella                    [-0.4859, -0.2280]  0.2579
+    incrociata                   [-0.5904, -0.1314]  0.4590
+  segni sulle medie per corsa      4/20   p = 0.01182
+
+o1_qkd_h16 - o1_qkd_h32_16
+  80 coppie appaiate su 20 corse e 8 celle
+  media su tutte le osservazioni   -0.1950
+  varianza della differenza: fra corse 56.5%   fra celle 10.7%   residuo 32.8%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per corsa                    [-0.3565, -0.0501]  0.3064
+    per cella                    [-0.3015, -0.0949]  0.2067
+    incrociata                   [-0.4100, -0.0057]  0.4043
+  segni sulle medie per corsa      4/20   p = 0.01182
+
+o1_qkd_h64_32 - o1_qkd_h32_16
+  80 coppie appaiate su 20 corse e 8 celle
+  media su tutte le osservazioni   +0.0551
+  varianza della differenza: fra corse 48.3%   fra celle  6.1%   residuo 45.6%
+  unita' di inferenza            intervallo 95%       ampiezza
+    per corsa                    [-0.0513, +0.1643]  0.2157   contiene lo zero
+    per cella                    [+0.0052, +0.0901]  0.0848
+    incrociata                   [-0.0819, +0.1843]  0.2662   contiene lo zero
+  segni sulle medie per corsa      9/20   p = 0.82380
+
+==================================================================
+RIEPILOGO   differenza da o1_qkd_h32_16, intervallo incrociato
+==================================================================
+  gruppo                       media          intervallo 95%    segni         p
+  o1_qkd_h64_32              +0.0551  [ -0.0819,  +0.1843]    9/20    0.82380  *
+  o1_qkd_h16                 -0.1950  [ -0.4100,  -0.0057]    4/20    0.01182
+  o1_qkd_h8                  -0.3395  [ -0.5904,  -0.1314]    4/20    0.01182
+
+  * l'intervallo incrociato contiene lo zero: su nuove corse e
+    nuove celle la differenza non e' distinguibile.
+
+  La differenza elimina l'effetto della cella, che nei livelli e'
+  la componente dominante: per questo i contrasti appaiati sono
+  molto piu' precisi del confronto fra le medie dei gruppi.
