@@ -161,6 +161,7 @@ def fase_aug(a, radice, semi):
                 "--classe", a.classe, "--ratio", a.ratio, "--pca", a.pca,
                 "--n-finale", str(a.n_finale), "--seeds", str(a.semi_qgan),
                 "--steps", str(a.steps), "--backend", a.backend,
+                "--reps", str(a.reps), "--latent-hi", a.latent_hi,
                 "--out", f"{a.out}/s{s}.jsonl"]
 
     if a.dry_run:
@@ -258,6 +259,15 @@ def main():
                          "semi in piu', perche' l'asse replica e' quello "
                          "che generalizza")
     ap.add_argument("--steps", type=int, default=5400)
+    ap.add_argument("--reps", type=int, default=4,
+                    help="profondita' dell'ansatz. SPEC congela 4; "
+                         "altri valori sono un'ablazione, e il raggio "
+                         "del latente va cambiato con --latent-hi auto, "
+                         "altrimenti si confondono profondita' e "
+                         "calibrazione")
+    ap.add_argument("--latent-hi", default="0.9327",
+                    help="raggio del latente: un numero, oppure auto "
+                         "per prendere quello calibrato per --reps")
     ap.add_argument("--backend", default="denso")
     ap.add_argument("--parallele", type=int, default=5)
     ap.add_argument("--thread", type=int, default=2,
@@ -289,7 +299,8 @@ def main():
     print(f"radice {radice}")
     print(f"{len(semi)} repliche x {a.semi_qgan} semi = "
           f"{len(semi) * a.semi_qgan} corse   "
-          f"{a.classe} {a.ratio} {a.pca}   steps {a.steps}")
+          f"{a.classe} {a.ratio} {a.pca}   steps {a.steps}   "
+          f"reps {a.reps}   raggio {a.latent_hi}")
     libero = shutil.disk_usage(radice).free / 2**30
     print(f"spazio libero {libero:.1f} GiB")
     print()

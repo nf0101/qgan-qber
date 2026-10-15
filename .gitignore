@@ -22,3 +22,6 @@ src/test.py
 
 .repomixignore
 short-repository.md
+
+# backup lasciati dalle patch
+*.prima_*
