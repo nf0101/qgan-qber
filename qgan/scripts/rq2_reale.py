@@ -64,6 +64,24 @@ FROZEN = dict(
 )
 
 
+def _pavimento(Xh, n_gen, sig, mmd, seme, cella):
+    """MMD fra due meta' della stessa cella, la seconda ricentrata.
+
+    Il generatore casuale e' PROPRIO e deterministico in (seme, cella):
+    non tocca `rng_diag`, quindi aggiungere questa misura non sposta il
+    flusso delle altre e la corsa resta riproducibile.
+    """
+    import numpy as _np
+    r = _np.random.default_rng((int(seme), int(cella), 0xBADA55))
+    meta = min(n_gen, len(Xh) // 2)
+    if meta < 20:                      # troppo poche per una stima sensata
+        return float("nan")
+    perm = r.permutation(len(Xh))
+    A, B = Xh[perm[:meta]], Xh[perm[meta:2 * meta]]
+    B_ric = _np.clip(B + (A.mean(axis=0) - B.mean(axis=0)), 0.0, 1.0)
+    return float(mmd(A, B_ric, sigma=sig))
+
+
 def interne(d):
     """Configurazioni non al bordo di nessun asse del condizionamento.
 
@@ -224,6 +242,14 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
                     np.clip(X_vic + (mu_vero - X_vic.mean(axis=0)),
                             0.0, 1.0),
                     sigma=sig)),
+                # PAVIMENTO sulla cella stessa: due meta' delle sue
+                # finestre reali, la seconda ricentrata sulla prima.
+                # Subisce lo stesso bias del pareggiamento delle medie,
+                # quindi e' il riferimento corretto per le due righe
+                # sopra — e sta sulle stesse celle, nello stesso record,
+                # con la stessa aggregazione.
+                "mmd_interno_ricentrato": float(_pavimento(
+                    Xh, n_gen, sig, metrics.mmd_rbf, seed, i)),
             }
         else:
             # Le due estrazioni della MMD restano QUI, dopo i prelievi di
@@ -286,6 +312,15 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
                 agg("mmd_incondizionato_ricentrato") / len(per_cella),
             "mmd_vicino_ricentrato_m":
                 agg("mmd_vicino_ricentrato") / len(per_cella),
+            "mmd_interno_ricentrato_m":
+                agg("mmd_interno_ricentrato") / len(per_cella),
+            # Le due quantita' del confronto, ora sulla stessa base.
+            "eccesso_generatore": (agg("mmd_condizionato_ricentrato")
+                                   - agg("mmd_interno_ricentrato"))
+                                  / len(per_cella),
+            "eccesso_vicino": (agg("mmd_vicino_ricentrato")
+                               - agg("mmd_interno_ricentrato"))
+                              / len(per_cella),
             # Quanto del deficit del condizionato era errore di media:
             # 0 = niente, 1 = tutto. NON e' limitato superiormente a 1.
             # La MMD^2 e' stimata con una U-statistica non distorta, che
@@ -415,6 +450,12 @@ def main():
                   f"   incond {r['mmd_incondizionato_m']:.5f}"
                   f" -> {r['mmd_incondizionato_ricentrato_m']:.5f}"
                   f"   quota di media {r['quota_media']:.3f}", flush=True)
+            eg, ev = r["eccesso_generatore"], r["eccesso_vicino"]
+            print(f"  OMOGENEO    pavimento interno "
+                  f"{r['mmd_interno_ricentrato_m']:+.5f}   eccesso: "
+                  f"generatore {eg:+.5f}  vicino {ev:+.5f}   "
+                  f"rapporto {eg/ev if ev else float('nan'):.1f}",
+                  flush=True)
             print(f"  SOLA FORMA  cond ricentrato "
                   f"{r['mmd_condizionato_ricentrato_m']:.5f}  contro "
                   f"vicino ricentrato {r['mmd_vicino_ricentrato_m']:.5f}"
