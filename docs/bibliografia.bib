@@ -1,108 +1,154 @@
+% ======================================================================
+% Bibliografia del progetto.
+%
+% FILE RICOSTRUITO. La versione precedente era corrotta: la graffa del
+% campo `doi` della vecchia voce `qkd_attack_ml` non si chiudeva, e le
+% voci aggiunte dopo erano finite dentro quel campo insieme a copie
+% duplicate di bb84, qgan_nisq e ids_survey. Qui le voci sono una sola
+% volta ciascuna e i campi sono chiusi.
+%
+% La vecchia `qkd_attack_ml` (C. Lu et al., Optics Express 27(20):
+% 28474-28484, 2019) e' stata RIMOSSA: non e' rintracciabile e la
+% paginazione non corrisponde al fascicolo. Al suo posto, con la stessa
+% chiave, Xu et al. 2024, verificata sull'editore.
+%
+% Stato di verifica:
+%   verificate sulla fonte  qkd_attack_ml, attacco_binario
+%   da confermare           tutte le altre: autori, titolo, sede e anno
+%                           sono solidi, volume/pagine/DOI vanno aperti
+% ======================================================================
+
 @inproceedings{bb84,
   author    = {Bennett, Charles H. and Brassard, Gilles},
-  title     = {Quantum cryptography: Public key distribution and coin tossing},
-  booktitle = {Proceedings of the IEEE International Conference on Computers, Systems and Signal Processing},
+  title     = {Quantum cryptography: Public key distribution and coin
+               tossing},
+  booktitle = {Proceedings of the IEEE International Conference on
+               Computers, Systems and Signal Processing},
   year      = {1984},
   pages     = {175--179},
   address   = {Bangalore, India},
-  note      = {\url{https://researcher.watson.ibm.com/researcher/files/us-bennetc/BB84highest.pdf}}
+  note      = {Ristampato in Theoretical Computer Science 560:7--11,
+               2014. \url{https://doi.org/10.1016/j.tcs.2014.05.025}}
 }
 
-% 2. Machine Learning per rilevamento attacchi in QKD (Esempio autorevole per qkd_attack_ml)
-% Questo articolo tratta l'uso di classificatori ML classici per rilevare eavesdropper nei protocolli QKD.
+% VERIFICATA 15/10/2026 su link.springer.com/article/10.1007/s11432-023-3988-x
 @article{qkd_attack_ml,
-  author    = {Lu, Chunqing and others},
-  title     = {Machine learning-based eavesdropping detection for quantum key distribution},
-  journal   = {Optics Express},
-  volume    = {27},
-  number    = {20},
-  pages     = {28474--28484},
-  year      = {2019},
-  publisher = {Optica Publishing Group},
-  doi       = {10.1364/OE.27% 1. Protocollo BB84 originale
-               @inproceedings{bb84,
-               author    = {Bennett, Charles H. and Brassard, Gilles},
-               title     = {Quantum cryptography: Public key distribution and coin tossing},
-               booktitle = {Proceedings of the IEEE International Conference on Computers, Systems and Signal Processing},
-               year      = {1984},
-               pages     = {175--179},
-               address   = {Bangalore, India},
-               note      = {\url{https://researcher.watson.ibm.com/researcher/files/us-bennetc/BB84highest.pdf}}
-               }
-               
-               % 2. Machine Learning per rilevamento attacchi in QKD (Esempio autorevole per qkd_attack_ml)
-               % Questo articolo tratta l'uso di classificatori ML classici per rilevare eavesdropper nei protocolli QKD.
-               @article{qkd_attack_ml,
-               author    = {Lu, Chunqing and others},
-               title     = {Machine learning-based eavesdropping detection for quantum key distribution},
-               journal   = {Optics Express},
-               volume    = {27},
-               number    = {20},
-               pages     = {28474--28484},
-               year      = {2019},
-               publisher = {Optica Publishing Group},
-               doi       = {10.1364/OE.27.028474},
-               url       = {https://opg.optica.org/oe/fulltext.cfm?uri=oe-27-20-28474}
-               }
-               
-               % 3. QGAN nell'Era NISQ (Circuti Quantistici Parametrizzati)
-               % Nota: Lloyd 2018 è il fondamento teorico, ma Zoufal 2019 è il paper di riferimento per i PQC (circuiti parametrizzati) menzionati nel tuo testo.
-               @article{qgan_nisq,
-               author    = {Zoufal, Christa and Lucchi, Aur\'elien and Woerner, Stefan},
-               title     = {Quantum Generative Adversarial Networks for learning and loading random distributions},
-               journal   = {npj Quantum Information},
-               volume    = {5},
-               number    = {1},
-               pages     = {103},
-               year      = {2019},
-               publisher = {Nature Publishing Group},
-               doi       = {10.1038/s41534-019-0223-2},
-               url       = {https://www.nature.com/articles/s41534-019-0223-2}
-               }
-               
-               % 4. Data Augmentation e Machine Learning negli IDS (Survey classica di riferimento)
-               % Lavoro fondamentale che discute le tecniche classiche di ML e la gestione dello sbilanciamento (come SMOTE) nei sistemi IDS.
-               @article{ids_survey,
-               author    = {Buczak, Anna L. and Guven, Erhan},
-               title     = {A Survey of Data Mining and Machine Learning Methods for Cyber Security Intrusion Detection},
-               journal   = {IEEE Communications Surveys \& Tutorials},
-               volume    = {18},
-               number    = {2},
-               pages     = {1153--1176},
-               year      = {2016},
-               publisher = {IEEE},
-               doi       = {10.1109/COMST.2015.2494502},
-               url       = {https://ieeexplore.ieee.org/document/7307098}
-               }.028474},
-  url       = {https://opg.optica.org/oe/fulltext.cfm?uri=oe-27-20-28474}
+  author    = {Xu, Jiaxin and Ma, Xiao and Liu, Jingyang and
+               Zhang, Chunhui and Li, Hongwei and Zhou, Xingyu and
+               Wang, Qin},
+  title     = {Automatically identifying imperfections and attacks in
+               practical quantum key distribution systems via machine
+               learning},
+  journal   = {Science China Information Sciences},
+  volume    = {67},
+  number    = {10},
+  pages     = {202501},
+  year      = {2024},
+  doi       = {10.1007/s11432-023-3988-x}
 }
 
-% 3. QGAN nell'Era NISQ (Circuti Quantistici Parametrizzati)
-% Nota: Lloyd 2018 è il fondamento teorico, ma Zoufal 2019 è il paper di riferimento per i PQC (circuiti parametrizzati) menzionati nel tuo testo.
+% VERIFICATA 14/10/2026 su arxiv.org/abs/2608.04047
+@misc{attacco_binario,
+  author        = {Isha and Singh, Deepak and Kumar, Devesh and
+                   Pal, S. K. and Hambarde, Praful and Shukla, Amit},
+  title         = {Beyond the {QBER} Threshold: A Temporal {QBER} Based
+                   Machine Learning Framework for Multi Attack Detection
+                   in {BB84} {QKD}},
+  year          = {2026},
+  month         = aug,
+  eprint        = {2608.04047},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CR},
+  url           = {https://arxiv.org/abs/2608.04047}
+}
+
 @article{qgan_nisq,
-  author    = {Zoufal, Christa and Lucchi, Aur\'elien and Woerner, Stefan},
-  title     = {Quantum Generative Adversarial Networks for learning and loading random distributions},
+  author    = {Zoufal, Christa and Lucchi, Aur\'elien and
+               Woerner, Stefan},
+  title     = {Quantum Generative Adversarial Networks for learning and
+               loading random distributions},
   journal   = {npj Quantum Information},
   volume    = {5},
   number    = {1},
   pages     = {103},
   year      = {2019},
-  publisher = {Nature Publishing Group},
-  doi       = {10.1038/s41534-019-0223-2},
-  url       = {https://www.nature.com/articles/s41534-019-0223-2}
+  doi       = {10.1038/s41534-019-0223-2}
 }
 
-% 4. Data Augmentation e Machine Learning negli IDS (Survey classica di riferimento)
-% Lavoro fondamentale che discute le tecniche classiche di ML e la gestione dello sbilanciamento (come SMOTE) nei sistemi IDS.
 @article{ids_survey,
   author    = {Buczak, Anna L. and Guven, Erhan},
-  title     = {A Survey of Data Mining and Machine Learning Methods for Cyber Security Intrusion Detection},
+  title     = {A Survey of Data Mining and Machine Learning Methods for
+               Cyber Security Intrusion Detection},
   journal   = {IEEE Communications Surveys \& Tutorials},
   volume    = {18},
   number    = {2},
   pages     = {1153--1176},
   year      = {2016},
-  publisher = {IEEE},
-  doi       = {10.1109/COMST.2015.2494502},
-  url       = {https://ieeexplore.ieee.org/document/7307098}
+  doi       = {10.1109/COMST.2015.2494502}
+}
+
+@inproceedings{nslkdd,
+  author    = {Tavallaee, Mahbod and Bagheri, Ebrahim and Lu, Wei and
+               Ghorbani, Ali A.},
+  title     = {A Detailed Analysis of the {KDD CUP 99} Data Set},
+  booktitle = {IEEE Symposium on Computational Intelligence for Security
+               and Defense Applications (CISDA)},
+  year      = {2009}
+}
+
+@article{smote,
+  author    = {Chawla, Nitesh V. and Bowyer, Kevin W. and
+               Hall, Lawrence O. and Kegelmeyer, W. Philip},
+  title     = {{SMOTE}: Synthetic Minority Over-sampling Technique},
+  journal   = {Journal of Artificial Intelligence Research},
+  volume    = {16},
+  pages     = {321--357},
+  year      = {2002}
+}
+
+@article{netsquid,
+  author    = {Coopmans, Tim and Knegjens, Robert and Dahlberg, Axel
+               and Maier, David and Nijsten, Lo{\"u}k and
+               de Oliveira Filho, Juli{\'o} and Papendrecht, Martijn
+               and Rabbie, Julian and Rozp{\k{e}}dek, Filip and
+               Skrzypczyk, Matthew and Wubben, Leon and de Jong, Walter
+               and Podareanu, Damian and Torres-Knoop, Ariana and
+               Elkouss, David and Wehner, Stephanie},
+  title     = {{NetSquid}, a {NET}work {S}imulator for {QU}antum
+               {I}nformation using {D}iscrete events},
+  journal   = {Communications Physics},
+  volume    = {4},
+  pages     = {164},
+  year      = {2021}
+}
+
+@article{parameter_shift,
+  author    = {Schuld, Maria and Bergholm, Ville and Gogolin, Christian
+               and Izaac, Josh and Killoran, Nathan},
+  title     = {Evaluating analytic gradients on quantum hardware},
+  journal   = {Physical Review A},
+  volume    = {99},
+  pages     = {032331},
+  year      = {2019}
+}
+
+@article{circuit_learning,
+  author    = {Mitarai, Kosuke and Negoro, Makoto and
+               Kitagawa, Masahiro and Fujii, Keisuke},
+  title     = {Quantum circuit learning},
+  journal   = {Physical Review A},
+  volume    = {98},
+  pages     = {032309},
+  year      = {2018}
+}
+
+@article{mmd,
+  author    = {Gretton, Arthur and Borgwardt, Karsten M. and
+               Rasch, Malte J. and Sch{\"o}lkopf, Bernhard and
+               Smola, Alexander},
+  title     = {A Kernel Two-Sample Test},
+  journal   = {Journal of Machine Learning Research},
+  volume    = {13},
+  pages     = {723--773},
+  year      = {2012}
 }

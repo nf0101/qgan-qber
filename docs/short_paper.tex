@@ -2,18 +2,25 @@
 
 % --- PACCHETTI FONDAMENTALI ---
 \usepackage[utf8]{inputenc}
+% T1 serve per i caratteri accentati: senza, LaTeX non sillaba le
+% parole che ne contengono — e il testo e' in italiano — e alcuni
+% comandi (l'ogonek di una voce bibliografica) non esistono in OT1.
+\usepackage[T1]{fontenc}
 \usepackage[italic]{mathastext}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds,calc}
 \usepackage{booktabs}
 \usepackage{cite}
 \usepackage{url}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 
 \begin{document}
 
 % --- TITOLO E AUTORI ---
-\title{Quantum Generative Adversarial Networks for Addressing Security Data Imbalance and Casual Attribution of QBER}
+% CORRETTO: era "Casual Attribution".
+\title{Quantum Generative Adversarial Networks for Addressing Security Data Imbalance and Causal Attribution of QBER}
 
 \author{
     \IEEEauthorblockN{Alfonso Zappia, Nicola Frugieri}
@@ -35,8 +42,10 @@
 \maketitle
 
 % --- ABSTRACT ---
+% RISCRITTO: la versione precedente si fermava alla baseline di Fase 1 e
+% descriveva le fasi successive come in corso. Ora riporta gli esiti.
 \begin{abstract}
-    Lo sbilanciamento dei dati rappresenta una sfida critica nella sicurezza informatica e nelle reti a Distribuzione di Chiavi Quantistiche (QKD), dove i rari attacchi avversari sono sommersi dal rumore operativo e dalle fluttuazioni fisiche del canale. In questo lavoro presentiamo un'architettura generativa avversaria quantistica ibrida (QGAN) sviluppata per la data augmentation e l'attribuzione causale degli errori tra i domini di Intrusion Detection System (IDS) e reti QKD simulate sul protocollo BB84. Il modello integra un generatore quantistico a 5 qubit basato sull'ansatz EfficientSU2 e condizionamento tramite data re-uploading, affiancato da un discriminatore classico Multi-Layer Perceptron (MLP) implementato in NumPy. La valutazione viene condotta su un dataset generato in ambiente NetSquid composto da 56.538 finestre temporali distribuite su 360 celle fisiche. L'analisi della baseline classica fissa un benchmark di Mean Absolute Error (MAE) pari a 0,1738 nelle valutazioni di generalizzazione fuori griglia (cell split / held-out), evidenziando un significativo degrado prestazionale rispetto ai casi interpolativi (MAE 0,1218). Vengono infine dettagliate le recenti revisioni architetturali della pipeline, tra cui l'allocazione del condizionamento a 8 ingressi e l'estensione del budget di addestramento a 5.400 step con convergenza guidata da MMD stratificata, ponendo le basi per la scomposizione causale dell'errore QBER tra attacco, rumore e rivelatore.
+    Presentiamo un'architettura generativa avversaria quantistica ibrida (QGAN) applicata a due domini di sicurezza con la medesima struttura: la \textit{data augmentation} della classe minoritaria su Intrusion Detection System (NSL-KDD) e l'attribuzione causale degli errori su reti QKD BB84 simulate. Un generatore a 5 qubit su ansatz EfficientSU2, con condizionamento per \textit{data re-uploading}, affianca un discriminatore classico sulla medesima rappresentazione a cinque dimensioni — le stesse osservabili fisiche su QKD, cinque componenti principali su IDS: cio' che il vincolo condivide e' la dimensionalita', non il significato fisico. I risultati sono articolati. L'attribuzione causale e' il contributo piu' solido: i numeri casuali comuni rendono i controfattuali esatti anziche' stimati, su una proprieta' di accoppiamento verificata e non assunta. La trasferibilita' architetturale regge in forma piu' debole dell'ipotesi — struttura identica sui due domini, ma raggio del latente, capacita' del discriminatore e passi di convergenza specifici del dominio. Sul ramo IDS l'augmentation migliora il rilevamento fuori distribuzione, ma il confronto con una gaussiana a momenti equivalenti non evidenzia un vantaggio statisticamente robusto del circuito in sei valutazioni: la spiegazione coerente con i dati e' che il guadagno provenga dalla collocazione fuori dall'inviluppo convesso anziche' dalla fedelta' distribuzionale. Sul ramo QKD una scomposizione attribuisce il 99\% del divario del condizionato all'errore di media e quantifica l'errore di forma residuo in circa sei volte il segnale distribuzionale disponibile. In entrambi i domini il protocollo di valutazione determina l'esito piu' del generatore: tre conclusioni intermedie sono state ritirate da controlli dichiarati prima della misura.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -44,185 +53,344 @@
 \end{IEEEkeywords}
 
 % --- SEZIONE 1: INTRODUZIONE ---
-\section{Introduzione e descrizione del problema}
+\section{Introduzione}
 
-I dataset impiegati nell'ambito della sicurezza informatica e delle comunicazioni quantistiche
-soffrono di uno sbilanciamento strutturale marcato. Nelle reti tradizionali basate su sistemi
-per il rilevamento delle intrusioni (IDS), così come nelle infrastrutture a Distribuzione di Chiavi Quantistiche
-(QKD), il traffico benigno e il normale rumore operativo del canale dominano numericamente la
-quasi totalità delle osservazioni. Al contrario, le istanze legate ad attacchi informatici o a tentativi di intercettazione avversaria da parte di un eavesdropper (\textit{Eve}) costituiscono una frazione estremamente ridotta ed episodica dell'intero volume dei dati raccolti.
-Tale sbilanciamento delle classi compromette la capacità dei tradizionali algoritmi di apprendimento automatico, i quali tendono ad appiattirsi sulla classe maggioritaria; ciò garantisce elevate metriche complessive di accuratezza superficiale,
-ma comporta un tasso di rilevamento inaccettabilmente basso per le minacce reali. Sebbene tecniche classiche di sovracampionamento come SMOTE o ADASYN tentino di riequilibrare i dati, esse faticano a sintetizzare la complessa struttura non lineare e le correlazioni ad alta dimensionalità proprie delle osservabili quantistiche.
-Per superare tali limitazioni, il nostro progetto propone un'architettura generativa avversaria quantistica ibrida (QGAN) volta alla \textit{data augmentation} mirata della classe minoritaria.
-L'iniziativa si articola su due domini applicativi distinti ma strettamente interconnessi: la validazione su traffico di rete classico (IDS) e l'estensione a un ambiente QKD simulato sul protocollo BB84. Il progetto persegue tre obiettivi strategici fondamentali:
+I dataset di sicurezza informatica e di comunicazione quantistica soffrono di uno sbilanciamento strutturale: nelle reti con sistemi di rilevamento delle intrusioni (IDS) come nelle infrastrutture a Distribuzione di Chiavi Quantistiche (QKD), traffico benigno e rumore operativo dominano la quasi totalità delle osservazioni, mentre attacchi e tentativi di intercettazione costituiscono una frazione episodica. I classificatori tendono percio' ad appiattirsi sulla classe maggioritaria, con accuratezza complessiva elevata e rilevamento inaccettabile sulle minacce reali; e le tecniche classiche di sovracampionamento come SMOTE \cite{smote} faticano a sintetizzare le correlazioni non lineari proprie delle osservabili quantistiche.
+
+Proponiamo un'architettura generativa avversaria quantistica ibrida (QGAN) per l'augmentation mirata della classe minoritaria, applicata a due domini con la medesima struttura: traffico di rete classico (NSL-KDD \cite{nslkdd}) e ambiente QKD simulato sul protocollo BB84. Il lavoro persegue tre obiettivi. Due sono realizzativi e portano la sigla O1 e O3; il secondo conserva la forma interrogativa RQ2 perche' e' posto come domanda di ricerca a esito non pregiudicato anziche' come obiettivo da conseguire.
+
 \begin{itemize}
-    \item \textbf{O1 (Trasferibilità Architetturale)}: dimostrare la generalizzabilità e la stabilità di un'architettura quantistica condivisa tra contesti applicativi e domini di sicurezza eterogenei;
-    \item \textbf{O2 (Augmentation e Rilevamento)}: incrementare la precisione e la sensibilità dei classificatori a valle nella distinzione tra attacchi reali e fluttuazioni stocastiche del canale;
-    \item \textbf{O3 (Attribuzione Causale dell'Errore)}: scomporre analiticamente il tasso di errore sui bit quantistici ($\text{QBER}_{\text{OSS}}$) nelle sue componenti fisiche costitutive: \begin{equation} \text{QBER}_{\text{oss}} = \text{QBER}_{\text{attacco}} + \text{QBER}_{\text{rumore}} + \text{QBER}_{\text{rivelatore}} \end{equation} rappresentate dal vettore target delle frazioni causali \begin{equation} y = (f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}})\end{equation};
+    \item \textbf{O1 (trasferibilità architetturale)}: stabilire se una stessa architettura quantistica si trasferisca fra domini di sicurezza eterogenei;
+    \item \textbf{RQ2 (generazione condizionata)}: verificare se il condizionamento consenta di stimare le componenti causali su configurazioni di canale non viste in addestramento, e se l'augmentation sintetica aumenti la sensibilità dei classificatori a valle;
+    \item \textbf{O3 (attribuzione causale)}: scomporre l'errore sui bit quantistici nelle componenti fisiche. La regola di attribuzione e' definita a livello di \emph{bit} e non di tasso: per ciascuna posizione setacciata si costruiscono i tre indicatori di errore a causa singola — $e_{\text{eve}}$, $e_{\text{can}}$, $e_{\text{riv}}$ — disattivando le altre due cause a flusso casuale invariato, e l'errore osservato ne e' la composizione \emph{XOR}
+          \begin{equation}
+              e_{\text{oss}} = e_{\text{eve}} \oplus e_{\text{can}} \oplus e_{\text{riv}},
+              \label{eq:xor}
+          \end{equation}
+          identità esatta in entrambi i rami della simulazione. Il vettore target raccoglie le \emph{quote relative dei tassi di errore controfattuale a causa singola} — non una scomposizione additiva del QBER osservato, che per quanto segue non sarebbe esatta —
+          \begin{equation}
+              y = (f_{\text{eve}},\, f_{\text{can}},\, f_{\text{riv}}), \quad
+              f_k = \frac{\bar{e}_k}{\textstyle\sum_j \bar{e}_j}, \quad \textstyle\sum_i f_i = 1,
+              \label{eq:frazioni}
+          \end{equation}
+          con $\bar{e}_k$ il tasso dell'indicatore $k$ sulla finestra; i pedici seguono le colonne \texttt{f\_eve}, \texttt{f\_canale}, \texttt{f\_rivelatore}. La somma unitaria e' dunque una \emph{normalizzazione}, non un'identità fisica. Il denominatore si annulla sulle finestre prive di errori attribuibili: in quel caso il codice assegna convenzionalmente $y=(0,0,0)$, che non giace sul simplesso. La convenzione interessa \textbf{259 finestre su 94.170}, lo $0{,}275\%$, concentrate come atteso dove l'errore e' minimo — il $5{,}4\%$ delle finestre nella cella con $I_e = 0$ e depolarizzazione più bassa, con decrescita monotona al crescere di entrambi i parametri. Sulle rimanenti la somma delle tre quote vale $1$ a meno dell'errore di macchina ($4{,}4 \cdot 10^{-16}$).
 \end{itemize}
-Tale scomposizione offre un prezioso strumento diagnostico e operativo per la gestione della rete,
-consentendo agli operatori di discriminare tempestivamente un guasto o degrado fisico
-dell'infrastruttura da un attacco malevolo effettivo, mantenendo al contempo inalterate
-le rigide soglie fisiche della sicurezza della chiave quantistica.
 
+La scomposizione ha valore operativo: consente di distinguere un degrado fisico dell'infrastruttura da un attacco effettivo, senza alterare le soglie di sicurezza della chiave.
 
-
-% --- SEZIONE 2: ARCHITETTURA QGAN ---
 \section{Stato dell'Arte}
 
-L'applicazione di tecniche di apprendimento automatico alle comunicazioni quantistiche e alla sicurezza di rete ha registrato un crescente interesse negli ultimi anni, articolandosi lungo tre direttrici principali:
+Il monitoraggio delle reti quantistiche e il rilevamento di attacchi sul protocollo BB84 \cite{bb84} hanno beneficiato di modelli classici. Xu et al.\ \cite{qkd_attack_ml} applicano l'apprendimento automatico all'identificazione in tempo reale di difetti di dispositivo e attacchi su sistemi QKD pratici, con accuratezza riportata del $98\%$; Isha et al.\ \cite{attacco_binario} classificano sette tipologie di attacco a partire da pattern temporali del QBER. Entrambi rispondono pero' alla domanda \emph{quale} anomalia sia presente — un'etichetta discreta — e non a \emph{quanta parte} dell'errore osservato sia imputabile a ciascuna causa fisica; ne' affrontano configurazioni di canale non viste in addestramento. La scomposizione continua del QBER in frazioni causali, valutata su celle escluse, e' il problema che questo lavoro pone. Sul versante generativo, Zoufal, Lucchi e Woerner \cite{qgan_nisq} mostrano che circuiti quantistici parametrizzati (PQC) possono caricare distribuzioni arbitrarie mappando correlazioni non lineari con pochissimi parametri addestrabili. Nel dominio classico l'uso di sovracampionamento per lo sbilanciamento negli IDS e' consolidato \cite{ids_survey}. Resta inesplorata un'architettura QGAN \emph{condivisa} fra dominio classico e quantistico, finalizzata alla scomposizione causale del QBER: e' la lacuna che questo lavoro affronta.
 
-\begin{itemize}
-    \item \textbf{Machine Learning per il Rilevamento in QKD:} Il monitoraggio delle reti quantistiche e l'individuazione di attacchi, definiti a partire dallo storico protocollo BB84 introdotto da Bennett e Brassard \cite{bb84}, hanno recentemente beneficiato dell'introduzione di modelli classici. Ad esempio, il lavoro di Lu et al. \cite{qkd_attack_ml} dimostra l'efficacia di classificatori basati sul machine learning nel rilevare la presenza di un eavesdropper. Tuttavia, tali approcci si limitano tipicamente a una classificazione binaria (dicotomica) o assumono condizioni stazionarie, rivelandosi insufficienti per la stima causale puntuale delle origini dell'errore su configurazioni di canale non viste in fase di addestramento (\textit{held-out}).
+\section{Architettura}
 
-    \item \textbf{QGAN nell'Era NISQ:} L'estensione del paradigma generativo avversario ai dispositivi quantistici (QGAN) ha aperto nuove prospettive per la sintesi di dati complessi. Come dimostrato da Zoufal, Lucchi e Woerner \cite{qgan_nisq}, è possibile sfruttare Circuiti Quantistici Parametrizzati (PQC) per apprendere e caricare fedelmente distribuzioni di probabilità arbitrarie. Rispetto alle architetture GAN puramente classiche, i generatori PQC riescono a mappare correlazioni ad alta dimensionalità e non lineari pur mantenendo un numero estremamente ridotto di parametri addestrabili.
+\begin{figure*}[t]
+    \centering
+    \begin{tikzpicture}[
+        font=\footnotesize,
+        dato/.style={draw, rounded corners=1.5pt, align=center,
+                     inner sep=3pt, text width=31mm},
+        mod/.style={draw, thick, align=center, inner sep=3pt,
+                    text width=44mm},
+        val/.style={draw, dashed, align=center, inner sep=3pt,
+                    text width=34mm},
+        fl/.style={-{Stealth[length=1.7mm]}, shorten >=0.5pt, shorten <=0.5pt},
+    ]
+    % ======== ramo QKD (sinistra) ========
+    \node[dato] (bb84)    at (0,  0)    {BB84 in NetSquid\\flussi casuali accoppiati};
+    \node[dato] (griglia) at (0, -1.45) {griglia $120$ celle $\times\,5$ semi\\\textbf{94.170} finestre};
+    \node[dato] (xy)      at (0, -3.05) {$X\in\mathbb{R}^5$ osservabili\\$y=(f_{\text{eve}},f_{\text{can}},f_{\text{riv}})$\\da controfattuali XOR};
+    \node[mod]  (attr)    at (0, -4.85) {\textbf{attributore} RF\\$X \mapsto y$, \emph{senza} $c$};
+    \node[val]  (skill)   at (0, -6.30) {skill su 4 protocolli\\divario RQ2 $=0{,}097$};
 
-    \item \textbf{Data Augmentation e Trasferibilità:} Nel dominio della sicurezza classica, come analizzato nella survey di riferimento di Buczak e Guven \cite{ids_survey}, l'impiego del data mining e di tecniche classiche di sovracampionamento (come SMOTE) per bilanciare i dati nei sistemi Intrusion Detection (IDS) è ormai consolidato. Nonostante ciò, l'adozione di un'architettura QGAN condivisa capace di eseguire una \textit{data augmentation} simultanea e trasferibile tra domini di rete classici e quantistici — finalizzata alla scomposizione causale del QBER nelle sue componenti fondamentali ($f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}}$) — costituisce una frontiera di ricerca ancora inesplorata che questo lavoro intende colmare.
-\end{itemize}
+    % ======== QGAN condivisa (centro) ========
+    \node[align=center, inner sep=1pt] (freeze) at (5.9, 0.1)
+        {\textit{feature freezing}: $d=5$ e topologia fissi\\[-1.5pt]
+         \emph{è condivisa la dimensione, non la semantica}};
+    \node[mod]  (disc) at (5.9, -1.25) {\textbf{discriminatore} $D_\phi$\\
+        MLP $5{+}d_c \!\to\! 32 \!\to\! 16 \!\to\! 1$};
+    \node[mod]  (gen)  at (5.9, -3.15) {\textbf{generatore} $G_\theta$\\
+        PQC a 5 qubit, \textsc{EfficientSU2}\\50 parametri addestrabili};
+    \node[dato, fill=black!5] (ing) at (4.05, -4.95) {ingressi di $G_\theta$:\\
+        $z\sim\mathcal{U}(0,r)$ su $RY$\\
+        $c$ su $RZ(\pi c)$: $d_c{=}3$ QKD, $0$ IDS};
+    \node[val]  (rq2)  at (5.9, -6.30) {RQ2 su celle escluse:\\MAE medie e MMD};
 
-% --- SEZIONE: ARCHITETTURA DELLA QGAN IBRIDA ---
-\section{Architettura della QGAN Ibrida}
-L'architettura proposta si basa su un paradigma avversario ibrido quantistico-classico operante nel regime NISQ (\textit{Noisy Intermediate-Scale Quantum}). Il modello combina la capacità di rappresentazione ad alta dimensionalità di un circuito quantistico parametrizzato con la stabilità e la velocità di calcolo di una rete neurale classica.
+    % ======== ramo IDS (destra) ========
+    \node[dato] (kdd) at (11.7,  0)    {NSL-KDD \texttt{r2l} / \texttt{probe}};
+    \node[dato] (sub) at (11.7, -1.35) {squilibrio $1{:}1000$\\\textbf{53} attacchi};
+    \node[dato] (pca) at (11.7, -2.80) {PCA a \textbf{5} componenti\\($\sim\!34\%$ della varianza)};
+    \node[mod]  (aug) at (11.7, -4.55) {\textbf{augmentation}\\+ correzione affine $(\mu,\Sigma)$};
+    \node[val]  (clf) at (11.7, -6.30) {classificatore\\PR-AUC su \texttt{KDDTest+}};
 
-\subsection{Panoramica del Paradigma Ibrido}
-Nel modello QGAN, la componente generativa $G_\theta$ e quella discriminativa $D_\phi$ competono in un gioco avversario a somma zero (\textit{minimax}). Il generatore quantistico trasforma un vettore di rumore casuale $z$ e un vettore di condizionamento fisico $c$ in campioni sintetici continuo-valutati $\hat{x}$, con l'obiettivo di imitare la distribuzione reale dei dati $p_{\text{data}}(x|c)$. Il discriminatore classico riceve sia campioni reali che sintetici e stima la probabilità che un dato provenga dalla distribuzione autentica. Il problema di ottimizzazione è espresso dalla funzione obiettivo:
+    % ======== archi ========
+    \draw[fl] (bb84)    -- (griglia);
+    \draw[fl] (griglia) -- (xy);
+    \draw[fl] (xy) -- node[right, font=\scriptsize, inner sep=2pt] {$(X,y)$} (attr);
+    \draw[fl] (attr)    -- (skill);
+    \draw[fl] (kdd)     -- (sub);
+    \draw[fl] (sub)     -- (pca);
+    \draw[fl] (pca)     -- (aug);
+    \draw[fl] (aug)     -- (clf);
+
+    % I dati reali entrano nel DISCRIMINATORE, non nel generatore: e'
+    % lui a confrontarli coi sintetici. Il generatore riceve solo z e c.
+    \draw[fl] (xy.east)  to[out=25,  in=190]
+        node[pos=0.78, above left=-1pt, font=\scriptsize] {$X$ reali} (disc.west);
+    \draw[fl] (pca.west) to[out=155, in=-10]
+        node[pos=0.74, above right=-1pt, font=\scriptsize] {53 reali} (disc.east);
+    \draw[fl] (ing.north) to[out=90, in=250] (gen.south);
+    \draw[{Stealth[length=1.7mm]}-{Stealth[length=1.7mm]}, thick]
+              (gen) -- (disc);
+    \draw[fl] (gen.south east) to[out=-35, in=180] (aug.west);
+    \draw[fl] (gen) -- (rq2);
+
+    % l'anello che NON si chiude
+    \draw[fl, dashed, gray] (rq2.west) -- (skill.east)
+        node[midway, fill=white, align=center, font=\scriptsize, text=gray, inner sep=2pt]
+        {$\times$ non eseguito};
+    \end{tikzpicture}
+    \caption{Pipeline dei due rami. Generatore e discriminatore sono gli
+        stessi nei due domini, a dimensionalità e topologia fissate dal
+        vincolo di \textit{feature freezing}; le cinque dimensioni sono
+        osservabili fisiche del canale su QKD e componenti principali su
+        IDS. L'attributore riceve le sole osservabili, \emph{senza} le
+        coordinate di cella, ed è il solo componente il cui impiego operativo non richieda condizioni ignote. L'arco
+        tratteggiato è l'anello non chiuso sperimentalmente: su griglia
+        reale RQ2 è valutato come accordo distribuzionale, non addestrando
+        l'attributore sulle finestre generate.}
+    \label{fig:pipeline}
+\end{figure*}
+
+La Figura~\ref{fig:pipeline} riassume i due rami e il punto in cui condividono il modello. Generatore $G_\theta$ e discriminatore $D_\phi$ competono in un gioco minimax: il generatore trasforma rumore $z$ e condizionamento fisico $c$ in campioni continui, il discriminatore stima la probabilità che un dato sia autentico.
 \begin{equation}
     \begin{split}
-        \min_\theta \max_\phi V(D_\phi, G_\theta) = {} & \mathbb{E}_{x \sim p_{\text{data}}}[\log D_\phi(x|c)]        \\
-                                                       & + \mathbb{E}_{z \sim p_z}[\log(1 - D_\phi(G_\theta(z|c)|c))]
+        \min_\theta \max_\phi V(D_\phi, G_\theta) = {} \\
+        \mathbb{E}_{x \sim p_{\text{data}}}[\log D_\phi(x|c)] \\
+        + \mathbb{E}_{z \sim p_z}[\log(1 - D_\phi(G_\theta(z|c)|c))]
     \end{split}
 \end{equation}
 
-\subsection{Generatore Quantistico ($G_\theta$)}
-Il generatore $G_\theta$ è implementato come un Circuito Quantistico Parametrizzato (PQC) in \textbf{Qiskit 2.5.2}, eseguito tramite il backend di simulazione ad alta intensità \textbf{Qiskit Aer} strutturato su $N=5$ qubit, in cui ciascun qubit è mappato direttamente su una delle 5 osservabili fisiche del sistema ($\text{QBER}_{\text{tot}}$, $\text{QBER}_X$, $\text{QBER}_Z$, asimmetria delle basi, tasso di sifting/loss).
-\begin{itemize}
-    \item \textbf{Encoding del Latente:} Un vettore di rumore casuale $z \sim \mathcal{U}(-r, r)$ viene codificato mediante rotazioni individuali $RY(z_i)$ su ciascun qubit. Il raggio latente $r$ è calibrato analiticamente ($r=0{,}82$ per il dominio QKD) per rispecchiare la dispersione condizionale delle osservabili.
-    \item \textbf{Ansatz Quantistico:} L'evoluzione dello stato adotta l'ansatz \texttt{EfficientSU2} con 4 ripetizioni (\textit{reps}=4) ed entanglement lineare tra qubit adiacenti, gestendo un totale di 50 parametri addestrabili $\theta$.
-    \item \textbf{Condizionamento e Data Re-uploading:} Le variabili fisiche ambientali $c$ (di dimensione $d_c \le 8$) sono iniettate tramite rotazioni $RZ(\pi \cdot c)$. Per prevenire il decadimento dei gradienti lungo il circuito, si adotta uno schema di \textit{data re-uploading} a due strati: il primo posizionato subito dopo l'encoding del latente e il secondo a metà dell'ansatz. In modalità autoregressiva ($d_c=8$), l'allocazione degli angoli sfrutta uno schema multilivello per garantire la piena visibilità dello stato storico della fibra.
-    \item \textbf{Estrazione delle Osservabili:} L'output continuo $\hat{x}_i \in [0, 1]$ viene ottenuto misurando la probabilità marginale dello stato $|1\rangle$ su ciascun qubit $i \in \{1, \dots, 5\}$.
-\end{itemize}
+\textbf{Generatore.} PQC in Qiskit 2.5.2, eseguito su Qiskit Aer e, nelle campagne a molte repliche, su un simulatore a vettore di stato denso vettorizzato sul minibatch. Cinque qubit, ciascuno mappato su un'osservabile: \texttt{qber}, \texttt{qber\_rect}, \texttt{qber\_diag}, \texttt{sift\_rate}, \texttt{loss\_rate} — le medesime cinque usate da attributore e discriminatore \emph{nel dominio QKD}. Sul dominio IDS i cinque ingressi sono componenti principali di NSL-KDD: il \textit{feature freezing} congela la dimensionalita' e la topologia, non la semantica delle variabili, e O1 va letto in questo senso. Il latente $z \sim \mathcal{U}(0, r)$ e' codificato per qubit con rotazioni $RY(z_i)$; il raggio $r$ e' calibrato affinche' la dispersione \emph{media} delle osservabili generate all'inizializzazione corrisponda a quella reale del dominio, e vale $0{,}82$ su QKD e $0{,}93$ su IDS. Un raggio scalare impone un solo vincolo: la corrispondenza riguarda la media delle cinque dispersioni, non le singole (Sezione~\ref{sec:limiti}). L'ansatz e' \texttt{EfficientSU2} con 4 ripetizioni ed entanglement lineare, 50 parametri. Il condizionamento ($d_c \le 8$) entra con rotazioni $RZ(\pi \cdot c)$ in \textit{data re-uploading} a due strati, dopo l'encoding del latente e a metà dell'ansatz, per contenere il decadimento dei gradienti. L'uscita $\hat{x}_i \in [0,1]$ e' la probabilità marginale dello stato $|1\rangle$ su ciascun qubit.
 
-\subsection{Discriminatore Classico ($D_\phi$)}
-Il discriminatore $D_\phi$ è strutturato come un Perceptron Multilivello (MLP) con topologia $5 + d_c \rightarrow 32 \rightarrow 16 \rightarrow 1$, implementato in NumPy puro. La scelta di un'implementazione classica priva di framework pesanti risponde a due esigenze fondamentali: azzerare l'overhead computazionale durante le iterazioni e consentire il calcolo analitico esatto della matrice Jacobiana del discriminatore rispetto agli ingressi:
+\textbf{Discriminatore.} MLP $5 + d_c \rightarrow 32 \rightarrow 16 \rightarrow 1$ in NumPy puro. La larghezza dello strato d'ingresso dipende dal dominio, perche' $d_c$ non e' lo stesso: vale $3$ su QKD, dove il generatore e' condizionato sulla terna di coordinate, e $0$ su IDS, dove la classe minoritaria non e' condizionata. Per \emph{topologia condivisa} si intende quindi che sono identici l'ansatz, il numero di qubit, il numero e l'ampiezza degli strati nascosti e la regola di ottimizzazione, mentre lo strato d'ingresso si adatta a $d_c$; è la forma precisa in cui O1 e' verificabile, con LeakyReLU ($\alpha = 0{,}01$) e uscita sigmoidale. L'implementazione senza framework azzera l'overhead per iterazione e consente il calcolo analitico esatto della Jacobiana $J_D = \partial D_\phi(\hat{x}|c) / \partial \hat{x}$.
+
+\textbf{Ottimizzazione.} I parametri del circuito sono aggiornati concatenando $J_D$ con la \textit{parameter-shift rule} \cite{circuit_learning,parameter_shift},
 \begin{equation}
-    J_D = \frac{\partial D_\phi(\hat{x}|c)}{\partial \hat{x}}
+    \frac{\partial G_\theta^i}{\partial \theta_j} = \frac{1}{2} \left[ G_{\theta + \frac{\pi}{2} e_j}^i - G_{\theta - \frac{\pi}{2} e_j}^i \right],
 \end{equation}
-I layer nascosti impiegano funzioni di attivazione LeakyReLU ($\alpha = 0{,}01$), mentre il neurone di uscita adotta un'attivazione sigmoidale per restituire la probabilità di autenticità del campione.
+e ottimizzati con Adam. Il budget e' $5400$ step in entrambi i domini, dimensionato sul più lento: su QKD l'ottimo cade fra $2.900$ e $3.400$ step, su IDS a $275$ di mediana (massimo $400$ su venti corse), con arresto precoce entro $900$ e senza mai avvicinarsi al tetto. Il fattore dieci fra i due domini e' una delle evidenze di O1. L'arresto e' guidato dalla \textit{Maximum Mean Discrepancy} \cite{mmd} stratificata sulle condizioni $c$, stimata con l'U-statistica non distorta.
 
-\subsection{Ottimizzazione Avversaria e Criteri di Convergenza}
-L'aggiornamento dei parametri del circuito quantistico $\theta$ avviene mediante retropropagazione dei gradienti concatenando la Jacobiana analitica del discriminatore $J_D$ con la \textit{Parameter-Shift Rule} applicata ai singoli gate del PQC:
-\begin{equation}
-    \frac{\partial G_\theta^i}{\partial \theta_j} = \frac{1}{2} \left[ G_{\theta + \frac{\pi}{2} e_j}^i - G_{\theta - \frac{\pi}{2} e_j}^i \right]
-\end{equation}
-Entrambe le componenti vengono ottimizzate tramite l'algoritmo Adam. Per evitare l'interruzione prematura rilevata nelle prime calibrazioni a 1.350 step, il budget di addestramento è stato esteso a $\text{max\_steps} = 5400$. La convergenza viene monitorata in tempo reale calcolando la \textit{Maximum Mean Discrepancy} (MMD) stratificata sulle condizioni di canale $c$, attivando l'arresto precoce (\textit{early stopping}) quando la distanza tra la distribuzione reale e quella sintetica si stabilizza (tipicamente tra i 2.900 e i 3.400 step).
+Due correzioni da un audit interno incidono sui numeri riportati: calcolare \textit{sifting} e \textit{loss rate} per finestra anziche' per corsa riduce la disparita' di dispersione fra variabili da $47\times$ a $3\times$, e inizializzare il ramo autoregressivo sulla media empirica dell'addestramento riduce la deriva transitoria da $16{,}3\times$ a $3{,}7\times$. I semi derivano da \texttt{SeedSequence} con identificatori fissi.
 
+\section{Setup Sperimentale}
 
-\section{Setup Sperimentale e Generazione dei Dataset}
-
-La validazione empirica dell'architettura proposta si articola su due domini applicativi distinti: il dominio quantistico, basato su una simulazione ad alta fedeltà di una rete QKD, e il dominio classico di Intrusion Detection Systems (IDS).
-
-\subsection{Ambiente di Simulazione QKD e Protocollo BB84}
-La simulazione del canale quantistico è realizzata mediante il framework \texttt{NetSquid}, modellando una linea di trasmissione in fibra ottica tra due nodi (Alice e Bob) che eseguono il protocollo di distribuzione delle chiavi BB84 con stati a singolo fotone. Il canale fisico è soggetto a perdite di attenuazione (dB/km) e a rumore depolarizzante stocastico. Un potenziale attaccante (Eve) intercetta il canale eseguendo un attacco di tipo \textit{Intercept-Resend} con probabilità di intercettazione $I_e \in [0{,}0, 1{,}0]$.
-
-Durante la trasmissione, il modulo \texttt{PerformanceTracker} misura continuamente le metriche operative aggregate su finestre temporali stazionarie. Per compensare l'attenuazione naturale della fibra sulle distanze maggiori ed evitare lo svuotamento statistico del campione, la dimensione del blocco di bit inviati da Alice adotta un meccanismo di scaling dinamico.
-
-\subsection{Struttura della Griglia a 360 Celle e Dataset}
-Il dataset QKD (\texttt{qber\_grid.csv}) viene generato attraverso uno \textit{sweep} esaustivo su una griglia di \textbf{360 celle fisiche}, individuate dalle combinazioni trasversali dei seguenti parametri di canale:
-\begin{itemize}
-    \item Lunghezza della fibra ottica $L \in [10, 80]\text{ km}$;
-    \item Tasso di depolarizzazione totale del canale $D_{\text{tot}} \in [0{,}00, 0{,}10]$;
-    \item Tasso di intercettazione dell'attaccante $I_e \in [0{,}00, 1{,}00]$.
-\end{itemize}
-
-Dalla simulazione completa sono estratte \textbf{56.538 finestre temporali}, ciascuna caratterizzata da un vettore di osservabili misurate $X \in \mathbb{R}^6$ e da un vettore target causale $y \in \mathbb{R}^3$:
+\textbf{Dominio QKD.} Le simulazioni BB84 girano su NetSquid \cite{netsquid}, simulatore di rete quantistica a eventi discreti. La griglia stazionaria copre $120$ configurazioni fisiche su tre assi — $I_e \in [0{,}00;\, 1{,}00]$, $L \in \{5, 10, 20, 40\}$ km, $D_{\text{tot}} \in [0{,}010;\, 0{,}060]$ — ciascuna simulata con cinque semi indipendenti, per \textbf{94.170 finestre} complessive, blocco di riferimento di $10^5$ bit e finestre di $200$ bit setacciati. Delle $120$ celle, \textbf{24 sono interne} (nessun parametro al proprio estremo) e $96$ di bordo: la distinzione fonda i protocolli di valutazione. Ogni finestra ha un vettore di osservabili $X \in \mathbb{R}^5$ e un target causale $y \in \mathbb{R}^3$:
 \begin{equation}
     \begin{split}
-        X = \big[ & \text{QBER}_{\text{tot}},\, \text{QBER}_X,\, \text{QBER}_Z,                     \\
-                  & |\text{QBER}_X - \text{QBER}_Z|,\, \text{sift\_rate},\, \text{loss\_rate} \big]
+        X = \big[ &\texttt{qber},\, \texttt{qber\_rect},\, \texttt{qber\_diag}, \\
+                  &\texttt{sift\_rate},\, \texttt{loss\_rate} \big]
     \end{split}
 \end{equation}
-\begin{equation}
-    y = (f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}}), \quad \text{con } \sum_{i} f_i = 1{,}0
-\end{equation}
-dove le tre frazioni causali $f_i$ rappresentano la scomposizione esatta e nota dell'origine fisica dell'errore totale rilevato nel canale.
+Due colonne ulteriori \emph{non} entrano in $X$: \texttt{basis\_asymmetry}, ridondante perche' pari a $|\texttt{qber\_rect} - \texttt{qber\_diag}|$, e \texttt{qber\_stability}, verificata priva di contributo marginale. L'esclusione vale identicamente per attributore, generatore e discriminatore. Una seconda famiglia introduce condizioni \emph{non stazionarie} con profili di deriva e intermittenza su quindici semi ($56.496$ finestre), per il ramo autoregressivo.
 
-\subsection{Dominio IDS e Vincolo di Feature Freezing (O1)}
-Per verificare l'obiettivo di trasferibilità architetturale (\textbf{O1}), il ramo classico della ricerca utilizza dataset benchmark di Intrusion Detection (quali NSL-KDD e CICIDS2017). A conclusione della Fase 1, la pipeline applica la procedura di \textit{Feature Freezing}, congelando una rappresentazione comune a dimensione fissa ($d = 5$ osservabili, estendibile a $d_c = 8$ con le condizioni ambientali) condivisa sia dal generatore quantistico che dal discriminatore classico su entrambi i domini. Tale vincolo garantisce che l'architettura QGAN non subisca modifiche strutturali nel passaggio dal contesto classico a quello quantistico.
+\textbf{Dominio IDS (O1).} Il ramo classico usa NSL-KDD nelle classi \texttt{r2l} e \texttt{probe}; l'estensione a CICIDS2017 e' prevista ma non rientra nelle misure qui riportate. Il \textit{feature freezing} fissa la dimensione della rappresentazione ($d = 5$, estendibile a $d_c = 8$ con le condizioni ambientali) e la topologia di generatore e discriminatore, cosi' che l'architettura non subisca modifiche strutturali nel passaggio fra domini. Le cinque dimensioni \emph{non} hanno lo stesso significato nei due rami: su QKD sono osservabili fisiche del canale, su IDS componenti principali di NSL-KDD. O1 e' percio' una domanda sulla portabilita' della struttura a dimensionalita' fissata, non sulla condivisione di variabili. Nella configurazione principale \texttt{r2l} e' sottocampionata a $1{:}1000$, che riduce la minoritaria a \textbf{53 campioni} in uno spazio di 5 componenti principali. Le componenti non sono naturalmente limitate, mentre il circuito produce uscite in $[0,1]$: la proiezione e' percio' una catena standardizzazione $\to$ PCA $\to$ riscalamento min-max su quell'intervallo, e la proiezione tronca in $[0,1]$ tutto cio' che vi passa. Le varianti sintetiche — generate, perturbate, interpolate — subiscono lo stesso troncamento, cosi' che nessun metodo possa guadagnare uscendo dal dominio; e vi sono soggetti \emph{anche} validazione e test. Poiche' il riscalamento e' adattato sull'addestramento, un'osservazione di \texttt{KDDTest+} fuori dall'intervallo appreso verrebbe schiacciata sul bordo, e trattandosi dell'insieme che contiene attacchi di tipo non visto il rischio e' che il troncamento agisca proprio su cio' che li distingue. Lo abbiamo misurato. Su \texttt{KDDTest+} il $2{,}93\%$ delle osservazioni ha almeno una componente troncata, ma sono \textbf{tutte traffico benigno}: $365$ su $9.711$ maggioritarie e \textbf{zero su $2.754$ attacchi}. Gli sfori sono inoltre minimi, al piu' $0{,}031$ su scala unitaria, e su addestramento e validazione il troncamento non interviene mai. Non avendo toccato alcuna osservazione di attacco, il troncamento non puo' averne alterato le feature. Cio' non equivale pero' a dimostrare che la PR-AUC sia invariata: l'ordinamento dipende dai punteggi di entrambe le classi, e $365$ campioni benigni modificati possono spostarlo, sia pure di poco vista l'entita' degli sfori. La verifica diretta — punteggiare il test con e senza troncamento finale, a modelli e soglie invariati — non richiede riaddestramento e resta da eseguire. L'intera catena e' adattata sulle \textbf{sole righe di addestramento}: nella variante impiegata qui, sul sottocampione che costituisce l'addestramento effettivo della replica. Validazione e insieme di test vengono trasformati con la medesima proiezione gia' adattata e non la riadattano mai, quindi nessuna informazione di valutazione entra nella rappresentazione. Poiche' la proiezione dipende dal sottocampione, il sottospazio cambia da replica a replica: e' una ragione ulteriore per cui le dieci repliche sono necessarie e una sola non basta. La scarsità e' deliberata: e' il regime in cui l'augmentation dovrebbe produrre il massimo beneficio, e in cui le conclusioni dipendono più fortemente da quale sottoinsieme di attacchi si osserva.
 
-% --- SEZIONE 5: VALUTAZIONE DELLA BASELINE CLASSICA E RISULTATI FASE 1 ---
-\section{Valutazione della Baseline Classica e Risultati della Fase 1}
-Prima di procedere all'integrazione del generatore quantistico, la Fase 1 del progetto ha stabilito un benchmark di riferimento classico per la stima del vettore target delle frazioni causali $y = (f_{\text{attacco}}, f_{\text{rumore}}, f_{\text{rivelatore}})$. Il modello adottato è un regressore d'insieme \textit{Multi-Output Random Forest} (100 alberi decisionali) addestrato sulle 6 osservabili fisiche misurate.
+\section{Attribuzione Causale (O3)}
 
-\subsection{Protocolli di Valutazione Sperimentale}
-Per valutare la robustezza, la stabilità e la capacità di generalizzazione dell'attributore classico, sono stati definiti tre distinti protocolli di suddivisione del dataset (\textit{split}):
-\begin{enumerate}
-    \item \textbf{Random Split (80/20):} Suddivisione casuale dell'intero dataset ($56.538$ finestre temporali) per misurare la capacità pura del modello di interpolare all'interno della griglia di celle viste.
-    \item \textbf{Seed Split:} Addestramento condotto sulle finestre generate dai primi 4 semi casuali di simulazione e test effettuato esclusivamente sul 5° seme. Questo protocollo verifica la stabilità del regressore rispetto alle fluttuazioni stocastiche interne di \texttt{NetSquid}.
-    \item \textbf{Cell Split / Held-Out:} Esclusione dal training set di intere celle fisiche ($10.994$ finestre di test escluse contro $45.544$ di addestramento), definite da combinazioni uniche di lunghezza della fibra, depolarizzazione e tasso di intercettazione. Questo protocollo misura la capacità di generalizzazione su configurazioni di canale mai viste.
-\end{enumerate}
+\textbf{Portata della verifica.} Due proprietà distinte vanno tenute separate. L'identità XOR dell'Eq.~\eqref{eq:xor} vale \emph{per costruzione}: i tre indicatori sono calcolati sulla medesima posizione setacciata della medesima corsa, disattivando le altre cause nel calcolo e non in una simulazione separata, quindi non si pone alcun problema di corrispondenza fra posizioni o di \textit{sifting} divergente, e l'identità si verifica algebricamente in entrambi i rami — con e senza Eve. Resta nondimeno una proprietà del codice, e come tale la riportiamo verificata per enumerazione diretta su tutte le posizioni del dataset anziché asserita. L'accoppiamento a numeri casuali comuni e' invece una proprietà \emph{fra condizioni diverse}, che il codice dichiarava senza verificare, e il controllo su $299$ posizioni comuni riguarda quella soltanto: le due verifiche non si sostituiscono a vicenda.
 
-\subsection{Risultati Empirici e Benchmark per RQ2}
-I risultati quantitativi in termini di Errore Medio Assoluto (MAE), sia complessivo che scomposizionale per le tre componenti causali, sono riassunti nella Tabella~\ref{tab:baseline_qkd}.
+\textbf{Additività dei tassi.} La composizione XOR dell'Eq.~\eqref{eq:xor} e' esatta bit per bit, ma \emph{non} diventa additiva sui tassi: per due cause indipendenti $P(A \oplus B) = P(A) + P(B) - 2P(A)P(B)$, quindi la lettura additiva $\text{QBER}_{\text{oss}} \simeq \text{QBER}_{\text{eve}} + \text{QBER}_{\text{can}} + \text{QBER}_{\text{riv}}$ vale al \emph{primo ordine} e sovrastima il totale di termini di cancellazione $\sim 2 p_i p_j$ — due inversioni che si annullano producono un bit corretto. Poiche' i tre indicatori a causa singola sono registrati per ogni finestra, il residuo $\sum_k \bar{e}_k - \bar{e}_{\text{oss}}$ e' misurabile sul dataset anziche' stimabile, ed e' stato misurato: mediana nulla, media $+0{,}006$, massimo $+0{,}080$ in valore assoluto di QBER. La distribuzione e' quella attesa — il residuo e' nullo in oltre meta' delle finestre, dove nessuna coppia di cause colpisce la medesima posizione, e cresce con il prodotto dei tassi. La lettura additiva e' dunque un'ottima approssimazione a basso errore e \emph{non} lo e' dove l'intercettazione e' intensa, regime in cui la somma dei tre tassi sovrastima il QBER osservato di diversi punti. E' la ragione sostanziale per cui i bersagli sono definiti come quote normalizzate e non come tassi assoluti: la normalizzazione e' insensibile a quel termine, mentre una scomposizione additiva dei tassi non lo sarebbe. La normalizzazione dell'Eq.~\eqref{eq:frazioni} assorbe quel residuo nei pesi relativi: e' la ragione per cui i target sono definiti come quote e non come tassi assoluti.
+
+Un secondo limite di identificabilità va dichiarato accanto a questo. La griglia varia l'intercettazione (\texttt{intercept\_rate}) e due parametri di \emph{canale} — lunghezza e depolarizzazione totale, con \texttt{depolar\_total} ripartita sui due segmenti — mentre la probabilità di errore del rivelatore e' tenuta \textbf{costante}. La componente $f_{\text{riv}}$ non ha quindi un asse proprio nella griglia, e la sua stima poggia sulla forma funzionale e sul residuo delle altre due: e' la spiegazione più probabile del fatto che sia la componente più difficile da predire (Sezione~\ref{sec:baseline}).
+
+L'attribuzione poggia inoltre su una proprietà che il modulo di simulazione dichiarava senza verificarla: che condizioni sperimentali diverse condividano i medesimi numeri casuali posizione per posizione, rendendo i controfattuali analitici esatti anziche' stimati. Poiche' le intercettazioni sono annidate — al variare della soglia $I_e$ cambia quali posizioni Eve attacca, non il flusso che le determina — una posizione intercettata a $I_e = 0{,}25$ lo e' anche a $0{,}50$, e su quelle posizioni comuni esito della misura di Eve, operatore di Pauli del canale ed esito di Bob devono coincidere.
+
+La verifica e' una prova diretta su tre proprietà: stabilità dei flussi fra processi, coerenza fra catena modellata ed eseguita, e accoppiamento fra condizioni; la terza e' decisiva e non deducibile dalla lettura del codice. L'esito mostra \textbf{zero divergenze su 299 posizioni comuni} con accoppiamento attivo, contro \textbf{87 su 299} ($29{,}1\%$) in sua assenza. Quel $29\%$ e' la firma attesa di una misura che attinge a un flusso non controllato: su una base coniugata scelta a caso l'esito coincide per puro caso in circa metà dei casi, e la frazione osservata e' compatibile con la quota di posizioni in cui le basi di Eve e Bob differiscono.
+
+\section{Baseline Classica}
+\label{sec:baseline}
+
+Prima di integrare il generatore abbiamo stabilito un riferimento classico per la stima di $y$: una \textit{Multi-Output Random Forest} (100 alberi), accanto a un \textit{Histogram Gradient Boosting} e a una regressione \textit{ridge}, per distinguere i limiti del modello da quelli del problema. La geometria della griglia consente quattro protocolli: \textbf{random} (suddivisione casuale 80/20: interpolazione dentro celle viste), \textbf{seed} (addestramento sui primi quattro semi, test sul quinto: cambia solo la realizzazione stocastica), \textbf{interior} (esclusione delle 24 celle interne, circondate da celle viste: interpolazione geometrica) e \textbf{boundary} (esclusione delle 96 di bordo: estrapolazione).
+
+I MAE grezzi \emph{non} sono confrontabili fra protocolli, perche' i test hanno difficoltà intrinseca diversa — il riferimento banale, la media del training, vale $0{,}1365$ sulle celle interne e $0{,}2079$ su quelle di bordo. Il confronto va fatto sullo \textbf{skill}, la frazione di errore del riferimento banale eliminata dal modello: $0$ se il modello equivale alla media, $1$ per la predizione perfetta (Tabella~\ref{tab:baseline_qkd}).
 
 \begin{table}[htbp]
-    \caption{Prestazioni dell'Attributore Baseline Classico sui Tre Protocolli (MAE)}
+    \caption{Attributore classico (Random Forest) sui quattro protocolli,
+        griglia da 94.170 finestre. Lo skill è la frazione di errore del
+        riferimento banale eliminata dal modello.}
     \label{tab:baseline_qkd}
     \centering
-    \setlength{\tabcolsep}{3pt} % Riduce il padding orizzontale tra le colonne
-    \resizebox{\columnwidth}{!}{% Scala la tabella alla larghezza esatta della colonna
-        \begin{tabular}{lcccc}
+    \setlength{\tabcolsep}{3pt}
+    \resizebox{\columnwidth}{!}{%
+        \begin{tabular}{lccc}
             \toprule
-            \textbf{Protocollo}            & \textbf{MAE Tot.} & \textbf{MAE ($f_{\text{att}}$)} & \textbf{MAE ($f_{\text{can}}$)} & \textbf{MAE ($f_{\text{riv}}$)} \\
+            \textbf{Protocollo} & \textbf{MAE}        & \textbf{MAE banale} & \textbf{Skill}      \\
             \midrule
-            Random Split                   & 0{,}1218          & 0{,}1350                        & 0{,}1426                        & 0{,}0876                        \\
-            Seed Split                     & 0{,}1218          & 0{,}1349                        & 0{,}1413                        & 0{,}0892                        \\
-            \textbf{Cell Split (Held-Out)} & \textbf{0{,}1738} & \textbf{0{,}1907}               & \textbf{0{,}1918}               & \textbf{0{,}1389}               \\
+            random              & $0{,}0856 \pm 0{,}0006$ & $0{,}1965$      & $0{,}564 \pm 0{,}003$ \\
+            boundary            & $0{,}1002 \pm 0{,}0083$ & $0{,}2079$      & $0{,}516 \pm 0{,}042$ \\
+            interior            & $0{,}0725 \pm 0{,}0126$ & $0{,}1365$      & $0{,}467 \pm 0{,}098$ \\
+            \textbf{seed}       & $\mathbf{0{,}1174 \pm 0{,}0018}$ & $0{,}1966$ & $\mathbf{0{,}403 \pm 0{,}008}$ \\
             \bottomrule
         \end{tabular}%
     }
 \end{table}
-L'analisi dei dati evidenzia due comportamenti fondamentali:
-\begin{itemize}
-    \item \textbf{Stabilità allo Stocastico:} L'uguaglianza perfetta tra Random Split ($\text{MAE} = 0{,}1218$) e Seed Split ($\text{MAE} = 0{,}1218$) dimostra che il regressore classico è insensibile alle fluttuazioni stocastiche di simulazione su celle note.
-    \item \textbf{Degrado di Generalizzazione (Benchmark RQ2):} Quando il modello è valutato su celle fisiche non viste (\textit{Cell Split}), l'errore medio complessivo subisce un incremento del \textbf{42{,}7\%}, passando da $0{,}1218$ a \textbf{0{,}1738}. L'errore si concentra principalmente nella stima della frazione di attacco ($f_{\text{attacco}} = 0{,}1907$) e del rumore di canale ($f_{\text{rumore}} = 0{,}1918$).
-\end{itemize}
 
-Il valore \textbf{$\text{MAE} = 0{,}1738$} rappresenta il \textbf{benchmark ufficiale per la domanda di ricerca RQ2}: esso stabilisce la soglia di errore che la \textit{data augmentation} condotta tramite la QGAN dovrà abbattere nelle Fasi 4 e 5.
+Due letture. \textbf{L'ostacolo dominante e' stocastico, non geometrico}: il protocollo peggiore e' \texttt{seed}, con skill $0{,}403$, dove le celle sono tutte viste e cambia soltanto il seme di simulazione; \texttt{interior} e \texttt{boundary}, che richiedono interpolazione ed estrapolazione, fanno meglio. La variabilità fra realizzazioni della stessa configurazione pesa dunque più della distanza nello spazio dei parametri. \textbf{Il limite e' del problema, non del modello}: i tre regressori degradano nello stesso ordine su tutti i protocolli — su \texttt{interior} lo skill vale $0{,}467$ per la foresta, $0{,}299$ per il boosting, $0{,}108$ per la ridge — e nessuno si avvicina alla predizione perfetta nemmeno sul protocollo casuale. Lo scomposto per componente mostra dove si concentra la difficoltà: su \texttt{seed} lo skill scende a $0{,}265$ per $f_{\text{can}}$ e $0{,}316$ per $f_{\text{riv}}$, mentre $f_{\text{eve}}$ resta a $0{,}535$. Distinguere rumore di canale da errore di rivelatore e' il sotto-problema difficile; riconoscere l'attacco lo e' molto meno.
 
-\subsection{Variante Classificatoria Binaria}
-Per consentire un confronto diretto con la letteratura esistente (es. arXiv:2608.04047), è stata implementata anche una variante classificatoria binaria (``Attacco SI / NO''). Un classificatore \textit{Random Forest} valutato su Random Split ha ottenuto un'\textbf{Accuracy del 90{,}34\%} e un \textbf{$F_1$-Score (macro) dell'82{,}44\%}. Il divario tra accuratezza e $F_1$-score conferma l'impatto dello sbilanciamento delle classi nelle condizioni di attacco debole confuse col rumore di fondo.
+Il \textbf{riferimento per RQ2} e' il divario fra \texttt{random} e \texttt{interior}: $0{,}564$ contro $0{,}467$ di skill, ossia \textbf{$0{,}097$} di spazio che la generazione condizionata dovrebbe colmare. Una variante binaria (attacco si'/no) sulle 36 celle non estreme rispetto a $I_e$ colloca il lavoro rispetto alla letteratura: accuracy $0{,}9269 \pm 0{,}0214$ contro un banale di $0{,}8148$, $F_1$ macro $0{,}8708$, dove Isha \textit{et al.}~\cite{attacco_binario} riportano $0{,}8803$ con 63 feature temporali. Il confronto e' indicativo e non controllato — simulatori, feature e tassonomie differiscono — e il margine di 11 punti sul banale mostra che il problema binario e' molto meno severo di quello di attribuzione.
 
+\section{Risultati del Ramo IDS}
 
-% --- SEZIONE 4: BASELINE FASE 1 ---
-\section{Revisioni di sistema ed audit della pipeline}
+Le prime misure poggiavano su un unico campione della minoritaria, 53 attacchi \texttt{r2l} con seme fissato. Il pre-processing e' stato quindi parametrizzato sul seme, producendo \textbf{dieci repliche indipendenti} dello split, ciascuna con propria sottoselezione, PCA riadattata e insieme di validazione, e ciascuna addestrata con due semi: venti corse. Repliche e semi sono assi \emph{incrociati}, non annidati, e l'unità che generalizza e' la replica: gli intervalli provengono da un bootstrap che ricampiona entrambi gli assi, il test dei segni opera sulle medie per replica, e la misura conclusiva e' su \texttt{KDDTest+}, mai usato per alcuna scelta di modello o soglia e contenente attacchi assenti dall'addestramento. Il protocollo conta: il divario della QGAN valeva $-0{,}197$ sullo split originale e vale $-0{,}112$ sulle dieci repliche, con valori per replica fra $-0{,}049$ e $-0{,}206$ — quello split era il più ostile dei dieci. La Tabella~\ref{tab:ids_test} riporta la PR-AUC su \texttt{KDDTest+} — priva di soglia, quindi insensibile alla collocazione dell'operating point — come differenza da SMOTE, baseline di riferimento della letteratura.
 
-In seguito all'audit di sistema, la pipeline di addestramento e l'architettura della QGAN sono state sottoposte a un processo di revisione e ottimizzazione volta a garantire la riproducibilità sperimentale e la stabilità fisica del modello.
+\begin{table}[htbp]
+    \caption{Ramo IDS: PR-AUC su \texttt{KDDTest+}, differenza da SMOTE.
+        Intervalli al 95\% da bootstrap incrociato su repliche $\times$
+        semi; i segni indicano le repliche con differenza positiva su
+        dieci. L'asterisco marca gli intervalli che contengono lo zero.}
+    \label{tab:ids_test}
+    \centering
+    \setlength{\tabcolsep}{3pt}
+    \resizebox{\columnwidth}{!}{%
+        \begin{tabular}{lccc}
+            \toprule
+            \textbf{Variante}               & \textbf{Media}       & \textbf{Int. 95\%}       & \textbf{Segni} \\
+            \midrule
+            \textbf{QGAN + corr. affine}    & $\mathbf{+0{,}1237}$ & $[+0{,}084, +0{,}161]$   & 10/10          \\
+            Jitter $0{,}30\times$           & $+0{,}1214$          & $[+0{,}090, +0{,}158]$   & 10/10          \\
+            Jitter $0{,}10\times$           & $+0{,}1192$          & $[+0{,}088, +0{,}160]$   & 10/10          \\
+            Gaussiana, momenti esatti       & $+0{,}0973$          & $[+0{,}042, +0{,}150]$   & 8/10           \\
+            Gaussiana $(\mu, \Sigma)$       & $+0{,}0915$          & $[+0{,}040, +0{,}138]$   & 8/10           \\
+            Jitter $0{,}03\times$           & $+0{,}0539$          & $[+0{,}008, +0{,}103]$   & 8/10           \\
+            QGAN                            & $+0{,}0034$          & $[-0{,}051, +0{,}049]^*$ & 5/10           \\
+            Duplicazione                    & $-0{,}0635$          & $[-0{,}086, -0{,}041]$   & 0/10           \\
+            Nessuna augmentation            & $-0{,}0743$          & $[-0{,}098, -0{,}054]$   & 0/10           \\
+            \texttt{class\_weight} bilanc.  & $-0{,}0897$          & $[-0{,}111, -0{,}068]$   & 0/10           \\
+            \bottomrule
+        \end{tabular}%
+    }
+\end{table}
 
-\subsection{Correzioni Architetturali ed Encoding (Fix B.10 e B.11)}
-Durante l'audit sono state individuate e risolte due anomalie critiche riguardanti il calcolo delle osservabili e l'iniezione delle variabili di condizionamento:
-\begin{itemize}
-    \item \textbf{Encoding a 8 Ingressi in Autoregressivo (Fix B.11):} Nella generazione sequenziale ($d_c=8$), la versione iniziale del circuito quantistico soffriva di un difetto di troncamento, leggendo soltanto le prime 5 componenti di condizionamento $c[0:5]$. È stato implementato uno schema di allocazione multilivello che mappa tutte le 8 variabili dello stato storico sui gate $RZ(\pi \cdot c)$, garantendo al generatore quantistico una visibilità completa sulla dinamica temporale del canale.
-    \item \textbf{Normalizzazione delle Osservabili per Finestra (Fix B.10):} Il calcolo del \textit{sifting rate} e del \textit{loss rate} è stato riallineato alla singola finestra temporale anziché all'intera corsa di simulazione. Tale correzione ha abbattuto la disparità di dispersione artificiale tra le variabili da un valore sbilanciato di $47\times$ a una variazione fisica reale di $3\times$, stabilizzando le ampiezze dei gradienti durante la retropropagazione.
-\end{itemize}
+Tre letture, nessuna prevista.
 
-\subsection{Riproducibilità e Gestione dello Stato Iniziale}
-Per garantire il determinismo del modello nelle valutazioni multi-processo e prevenire fenomeni di deriva temporale, sono state introdotte due modifiche infrastrutturali:
-\begin{itemize}
-    \item \textbf{RNG Deterministico (Fix B.9):} L'hashing basato su stringhe per la generazione dei semi casuali è stato sostituito dall'adozione rigorosa di \texttt{numpy.random.SeedSequence} con identificatori numerici fissi.
-    \item \textbf{Inizializzazione Autoregressiva ($w_0$):} Nel primo passo della generazione sequenziale, lo stato iniziale $w_0$ è stato impostato sulla media empirica delle finestre di addestramento ($w_0 = \text{`media'}$). Questo intervento ha ridotto il rapporto di deriva transitoria iniziale dal $16{,}3\times$ al $3{,}7\times$.
-\end{itemize}
+\textbf{L'ordinamento si inverte fra dentro e fuori distribuzione.} Sul validation, estratto dallo stesso split del training, SMOTE e' terzo fra tredici varianti e precede la QGAN corretta di $0{,}015$ di $F_1$; su \texttt{KDDTest+} la segue di $0{,}124$ di PR-AUC, dieci repliche su dieci. I due scarti vanno letti separatamente, perche' metriche diverse non si sommano: cio' che si inverte e' l'\emph{ordinamento}, non una singola quantità. Il meccanismo e' diretto: SMOTE genera combinazioni convesse di punti reali, quindi i suoi campioni restano \emph{dentro l'inviluppo convesso} dei 53 attacchi osservati, e la duplicazione vi sta sopra; un test con attacchi di tipo nuovo penalizza sistematicamente questa classe di metodi. La scala della perturbazione lo conferma come dose-risposta: sul validation l'ottimo sta a perturbazione piccola e la duplicazione e' ultima fra tutte ($0{,}661$ contro $0{,}829$ al $3\%$ della dispersione media), mentre sul test l'ottimo si sposta verso perturbazioni ampie e il jitter al $30\%$ e' indistinguibile da quello al $10\%$.
 
-\subsection{Estensione del Budget di Addestramento e Convergenza MMD}
-L'analisi delle curve di loss ha evidenziato che l'addestramento con limite a 1.350 step veniva interrotto prematuramente mentre la rete avversaria era ancora in fase di apprendimento attivo. Di conseguenza, il budget massimo è stato elevato a $\text{max\_steps} = 5400$.
+\textbf{Il generatore quantistico non contribuisce oltre i propri primi due momenti.} Il confronto decisivo mette la nuvola della QGAN contro una gaussiana multivariata stimata sugli stessi 53 punti attraverso la medesima mappa affine, che impone media e covarianza reali in modo esatto: le due nuvole condividono media e covarianza per costruzione e differiscono solo per la struttura di ordine superiore. L'uguaglianza non e' pero' lasciata alla costruzione, e non potrebbe esserlo: la mappa affine e' seguita da un troncamento in $[0,1]$, e la composizione $\operatorname{clip}(AX+b)$ non e' affine, quindi i momenti imposti a monte non sono automaticamente quelli dei campioni valutati. Lo scarto di covarianza e' percio' misurato \emph{a valle del troncamento}, sulle nuvole che arrivano al classificatore: in norma di Frobenius relativa vale $0{,}0124$ per il circuito e $0{,}0131$ per la gaussiana, entrambi oltre un ordine di grandezza sotto il pavimento di campionamento di $0{,}2603$, l'errore che si ottiene ricampionando i 53 punti reali da se stessi. I due valori misurano la distanza di \emph{ciascuna} nuvola dai dati reali, non la distanza fra le due: per disuguaglianza triangolare queste differiscono fra loro al piu' di $0{,}0255$ nella stessa normalizzazione, che resta un decimo del pavimento di campionamento. I momenti sono dunque corrispondenti \emph{ai reali} entro $0{,}013$ ciascuno sui dati effettivamente valutati, non identici fra loro in senso stretto; una misura diretta della differenza fra le due nuvole, su media e covarianza, renderebbe il confronto piu' stringente e non e' stata effettuata.
 
-La convergenza viene controllata calcolando la \textit{Maximum Mean Discrepancy} (MMD) stratificata sulle condizioni di canale $c$. I test sperimentali mostrano che il punto di ottimo stazionario viene raggiunto in modo consistente tra i $2.900$ e i $3.400$ step, momento in cui interviene il meccanismo di \textit{early stopping}.
+\begin{table}[htbp]
+    \caption{Contrasto decisivo QGAN $-$ gaussiana a momenti corrispondenti.
+        Tutti gli intervalli incrociati contengono lo zero.}
+    \label{tab:controllo}
+    \centering
+    \setlength{\tabcolsep}{3pt}
+    \resizebox{\columnwidth}{!}{%
+        \begin{tabular}{llccc}
+            \toprule
+            \textbf{Metrica} & \textbf{Insieme} & \textbf{reps} & \textbf{Media} & \textbf{Int. 95\%} \\
+            \midrule
+            $F_1$ a soglia   & validation & 4 & $+0{,}0003$ & $[-0{,}013, +0{,}013]$ \\
+            $F_1$ a soglia   & test       & 4 & $+0{,}0422$ & $[-0{,}004, +0{,}091]$ \\
+            $F_1$ oracolo    & test       & 4 & $+0{,}0218$ & $[-0{,}014, +0{,}052]$ \\
+            PR-AUC           & test       & 4 & $+0{,}0263$ & $[-0{,}008, +0{,}060]$ \\
+            PR-AUC           & test       & 8 & $+0{,}0085$ & $[-0{,}027, +0{,}044]$ \\
+            $F_1$ oracolo    & test       & 8 & $-0{,}0042$ & $[-0{,}040, +0{,}028]$ \\
+            \bottomrule
+        \end{tabular}%
+    }
+\end{table}
 
-\subsection{Esito dell'Audit di Fase 3 per il Ramo IDS}
-L'audit conclusivo della Fase 3 per il dominio classico (completato il 5 ottobre 2026) ha confermato l'efficacia del modello. La \textit{data augmentation} condotta tramite la QGAN sulle classi minoritarie dei dataset IDS ha prodotto un incremento statisticamente significativo del macro $F_1$-score dei classificatori a valle, superando nettamente le baseline classiche di oversampling (SMOTE e ADASYN) e validando l'ipotesi di trasferibilità architetturale (\textbf{O1}).
+I conteggi dei segni valgono 5, 6, 6, 6, 7 e 8 su dieci: indistinguibili da esiti casuali. Raddoppiare la profondità dell'ansatz da \textit{reps}$=4$ a $8$, con raggio latente ricalibrato, non fa comparire alcun contributo: la stima si avvicina allo zero invece di allontanarsene. Nella stessa configurazione la QGAN non corretta e' battuta dalla gaussiana di $0{,}133$ di PR-AUC su \textbf{dieci repliche su dieci} ($[-0{,}184, -0{,}083]$). Il margine di $0{,}124$ della QGAN corretta su SMOTE e' quindi attribuibile al fatto che i suoi campioni escono dall'inviluppo convesso — proprietà che una gaussiana possiede banalmente — e non alla natura quantistica del generatore; la QGAN non corretta non si distingue da SMOTE ($+0{,}0034$, $[-0{,}051, +0{,}049]$, 5/10). Due precisazioni necessarie. Intervalli che contengono lo zero indicano \emph{assenza di evidenza} di un vantaggio, non evidenza di equivalenza: con dieci repliche la potenza non esclude differenze piccole. E le sei valutazioni della Tabella~\ref{tab:controllo} non sono indipendenti fra loro — condividono le medesime dieci repliche e, a coppie, il medesimo insieme di valutazione o la medesima profondità — quindi vanno lette come sei viste concordi sullo stesso dato, non come sei prove separate. Anche la spiegazione geometrica resta un'ipotesi coerente con i dati finche' la frazione di massa sintetica esterna all'inviluppo non viene misurata direttamente. Le tre ablazioni causali, con verso dichiarato prima della misura, confermano solo in parte: distorcere le dispersioni per feature di SMOTE non ne degrada la prestazione sul test ($-0{,}0110$, $[-0{,}041, +0{,}017]$) e riportare quelle della QGAN ai valori reali non la recupera ($-0{,}0081$, $[-0{,}079, +0{,}076]$), quindi l'ipotesi delle dispersioni non e' sostenuta in nessuno dei due versi. Regge soltanto la correzione completa di media e covarianza ($+0{,}1202$, $[+0{,}080, +0{,}168]$, 10/10): la grandezza su cui agire e' la struttura di second'ordine, non la scala delle singole componenti.
 
-% --- SEZIONE 6: CONCLUSIONI ---
-\section{Conclusion and Next Steps}
-This work establishes a solid foundation for quantum-assisted data augmentation and causal error attribution. The experimental baseline confirms that classical models struggle to generalise on unobserved quantum channel states ($\text{MAE} = 0.1738$). Current ongoing efforts (Phase 4 and Phase 5) focus on completing multi-seed QGAN training over the held-out QKD grid, evaluating whether quantum synthetic augmentation successfully degrades the attribution MAE below the classical benchmark.
+\textbf{La MMD non e' un criterio di selezione utilizzabile in questo regime.} La correlazione di rango fra MMD e utilità a valle \emph{cambia segno} secondo l'insieme di valutazione: $\rho = -0{,}20$ sul validation, $\rho = +0{,}25$ sul test con soglia trasferita, non significativa sulle due metriche prive di soglia ($\rho = +0{,}08$, $p = 0{,}26$; $\rho = -0{,}06$, $p = 0{,}39$). Un controesempio diretto: duplicazione e jitter al $10\%$ hanno MMD distanti $0{,}0005$, entro il rumore dello stimatore, e $F_1$ distanti $0{,}169$. Poiche' la MMD stratificata governa l'arresto precoce, il criterio ottimizza una grandezza che non predice l'obiettivo operativo.
+
+\subsection{Limiti Dichiarati}
+\label{sec:limiti}
+
+Il raggio latente scalare impone un solo vincolo e la corrispondenza riguarda la dispersione \emph{media}: le dispersioni per componente restano fuori di un fattore fino a $4{,}5$ a entrambe le profondità esaminate. Il confronto fra \textit{reps}$=4$ e $8$ sulla nuvola non corretta e' quindi confuso con la qualità della calibrazione, e da esso non traiamo conclusioni; il contrasto della Tabella~\ref{tab:controllo} ne e' sostanzialmente immune, perche' la mappa affine porta entrambe le nuvole sui momenti reali e la verifica a valle del troncamento mostra che vi restano entro $0{,}013$ ciascuna; non perche' il troncamento li lasci esattamente invariati, cosa che non fa. L'ordinamento delle feature sui qubit e il rigetto dei raggi per componente provengono da misure su un unico split, sotto il protocollo a soglia fissa, e non sono stati ripetuti perche' una misura indipendente ne rende improbabile l'esito: azzerare l'errore di dispersione non produce alcun effetto a valle. \textbf{Che cosa e' noto al momento dell'inferenza.} Il vettore di condizionamento del ramo QKD comprende \texttt{intercept\_rate}, che nella simulazione e' una coordinata di progetto ma in una rete reale e' precisamente l'incognita. Le due componenti rimanenti sono invece operativamente note o caratterizzabili: la lunghezza della fibra e' un dato d'impianto, la depolarizzazione totale si misura in calibrazione. Vanno percio' tenuti distinti due compiti che questo lavoro non confonde ma che il lettore potrebbe sovrapporre. L'\emph{attributore} mappa le cinque osservabili nel vettore causale $y$ \textbf{senza ricevere alcuna coordinata di cella}, ed e' percio' il solo componente il cui impiego non richieda condizioni ignote: e' lui a sostenere l'uso operativo descritto nell'introduzione. Resta inteso che non ne dimostriamo la validazione su una rete QKD fisica — tutte le misure provengono da simulazione — quindi la dispiegabilità e' argomentata sulla struttura degli ingressi, non verificata sul campo. Il \emph{generatore condizionato} riceve invece la terna di coordinate, e il suo compito e' sintetizzare osservazioni per configurazioni non simulate — generazione dato uno scenario noto, non rilevamento di un attacco ignoto. Nessun risultato di RQ2 va letto come capacità di stimare $I_e$ quando $I_e$ non e' dato.
+
+\textbf{Il legame fra generatore e attributore non e' stato chiuso sperimentalmente.} Sulla griglia fisica simulata RQ2 e' valutato come \emph{accordo distribuzionale}: quanto la distribuzione generata per una cella esclusa somiglia a quella vera, in MAE delle medie e in MMD. Non e' valutato come augmentation, cioe' addestrando l'attributore sulle finestre generate per le celle escluse e misurandone lo skill. Il divario di $0{,}097$ fra \texttt{random} e \texttt{interior} e' quindi un riferimento espresso in skill che il ramo sintetico raggiunge nella stessa unità ($+0{,}244$), mentre le misure su griglia fisica simulata sono in unità distribuzionali e non vi si confrontano direttamente. L'esperimento che chiuderebbe l'anello — generare, addestrare l'attributore sul sintetico, misurare lo skill sulle celle escluse reali — e' definito ma non eseguito, e il suo esito non e' implicato da quanto riportato qui.
+
+Le conclusioni del ramo IDS riguardano infine \texttt{r2l} e \texttt{probe} di NSL-KDD con 5 componenti principali che spiegano circa il $34\%$ della varianza: l'augmentation opera in uno spazio che perde informazione rispetto alle feature originali.
+
+\section{Conclusioni}
+
+\textbf{O3 e' il contributo più solido.} I numeri casuali comuni rendono i controfattuali esatti anziche' stimati, su una proprietà di accoppiamento verificata e non assunta. Riguarda l'infrastruttura di misura più del modello generativo, e per questo sopravvive all'esito degli altri due obiettivi.
+
+\textbf{O1 regge in forma più debole dell'ipotesi.} L'architettura si istanzia su entrambi i domini senza modifiche strutturali, a dimensionalita' fissata e con semantica delle variabili diversa, ma non si trasferisce senza ritaratura. Il discriminatore mostra una \emph{soglia di capacità}: su QKD, con venti semi per livello e contrasti appaiati su (corsa, cella), ridurre la topologia da $32{\times}16$ a $16$ costa $-0{,}195$ di skill ($[-0{,}410, -0{,}006]$, 4/20, $p = 0{,}012$) e a $8$ costa $-0{,}340$ ($[-0{,}590, -0{,}131]$, 4/20), mentre allargarla a $64{\times}32$ non produce nulla ($+0{,}055$, intervallo che contiene lo zero, 9/20). Esiste dunque una capacità minima sotto la quale il discriminatore non guida più il generatore e oltre la quale non serve; il confronto non si estende a IDS, dove la topologia e' rimasta congelata. Il raggio del latente richiede calibrazione per dominio ($0{,}82$ e $0{,}93$, contro il valore $\pi$ prescritto) ma \emph{solo} scalare: calibrarlo per componente e' nullo in entrambi i domini — su QKD $+0{,}017$ con $[-0{,}126, +0{,}170]$ e 11/20, su IDS l'ablazione corrispondente e' parimenti nulla. Con il fattore dieci sui passi di convergenza, l'affermazione difendibile e' che l'architettura e' portabile mentre la sua calibrazione e' specifica del dominio.
+
+\textbf{RQ2 regge sul sintetico, ma la sua precisione dipende da quante celle si osservano.} Sulla griglia simulata la generazione condizionata ottiene $+0{,}244$ di skill sulle celle escluse, 18 corse su 20 positive ($p = 0{,}0004$), intervallo incrociato $[+0{,}017, +0{,}433]$ che esclude lo zero. Due riserve: il limite inferiore dista diciassette millesimi dallo zero, e il $55\%$ della varianza sta \emph{fra celle}, delle quali esistono soltanto otto distinte. La precisione e' limitata dal numero di celle, non di corse — l'opposto di dove sono state spese le repliche.
+
+\textbf{Sulla griglia fisica simulata il generatore perde contro l'interpolazione geometrica, e la causa non e' dove sembrava.} Il disegno e' sbilanciato per costruzione: ogni corsa esclude 12 delle 24 celle interne, scelte da un flusso proprio, quindi cinque corse danno $5 \times 12 = 60$ osservazioni su un'unione di \textbf{23 celle distinte} — una sola delle 24 non e' mai stata estratta. Su queste 60 coppie appaiate per (corsa, cella) (Tabella~\ref{tab:rq2_reale}), il condizionato batte media globale e generazione non condizionata su entrambi gli assi, pareggia il vicino più prossimo sulla media e lo batte sulla distribuzione, ma perde contro le finestre vere traslate sulla media interpolata: $-0{,}046$ di MAE e $-0{,}063$ di MMD, 0 corse su 5. Non c'e' asimmetria informativa — generatore e interpolante ricevono la stessa terna di coordinate — e l'interpolante non e' un modello concorrente ma dato reale ricentrato, che conserva forme marginali, correlazioni e rumore autentici.
+
+\begin{table}[htbp]
+    \caption{Griglia fisica simulata, contrasti appaiati su (corsa, cella):
+        5 corse, 23 celle, 60 coppie. Segno positivo quando il
+        generatore condizionato vince. Intervalli incrociati al 95\%,
+        che ricampionano sia le corse sia le celle.}
+    \label{tab:rq2_reale}
+    \centering
+    \setlength{\tabcolsep}{3pt}
+    \resizebox{\columnwidth}{!}{%
+        \begin{tabular}{llcc}
+            \toprule
+            \textbf{Asse} & \textbf{Riferimento} & \textbf{Differenza} & \textbf{Segni} \\
+            \midrule
+            MAE & non condizionato   & $+0{,}0899$ & 5/5 \\
+            MAE & media globale      & $+0{,}0840$ & 5/5 \\
+            MAE & vicino più prossimo & $+0{,}0105$\textsuperscript{$\ast$} & 4/5 \\
+            MAE & \textbf{interp.\ lineare} & $\mathbf{-0{,}0459}$ & 0/5 \\
+            \midrule
+            MMD & media globale      & $+0{,}2823$ & 5/5 \\
+            MMD & non condizionato   & $+0{,}2474$ & 5/5 \\
+            MMD & vicino più prossimo & $+0{,}0885$ & 5/5 \\
+            MMD & \textbf{interp.\ lineare} & $\mathbf{-0{,}0628}$ & 0/5 \\
+            \midrule
+            \multicolumn{4}{l}{\emph{livelli dopo il ricentraggio sulla media vera}} \\
+            MMD & condizionato & \multicolumn{2}{c}{$0{,}0657 \to 0{,}00060$} \\
+            MMD & non condizionato & \multicolumn{2}{c}{$0{,}3140 \to 0{,}09981$} \\
+            MMD & \textbf{vicino (reale)} & \multicolumn{2}{c}{$0{,}1541 \to \mathbf{-0{,}00011}$} \\
+            \midrule
+            \multicolumn{4}{l}{\emph{eccesso sul pavimento interno alla cella ($-0{,}00025$)}} \\
+            MMD & segnale disponibile & $+0{,}00014$\,{\scriptsize$[+0{,}00011, +0{,}00018]$} & 5/5 \\
+            MMD & \textbf{errore del generatore} & $\mathbf{+0{,}00085}$\,{\scriptsize$[+0{,}00057, +0{,}00116]$} & 5/5 \\
+            MMD & interp.\ lineare & $+0{,}00308$\,{\scriptsize$[+0{,}00115, +0{,}00531]$} & 5/5 \\
+            \bottomrule
+        \end{tabular}%
+    }
+
+    \vspace{1mm}
+    {\footnotesize \textsuperscript{$\ast$}L'unico intervallo incrociato
+    che contiene lo zero: $[-0{,}005, +0{,}024]$. Tutti gli altri lo
+    escludono. Nel blocco inferiore la MMD negativa del vicino reale
+    ricentrato indica discrepanza stimata nulla: la stima è una
+    U-statistica non distorta, che oltrepassa lo zero quando le due
+    distribuzioni coincidono.}
+\end{table}
+
+\textbf{Una scomposizione separa le due cause.} Ricentrando il campione generato sulla media vera della cella esclusa, senza riaddestrare nulla, la MMD del condizionato passa da $0{,}0657$ a $0{,}00060$: il \textbf{$99{,}1\%$} del divario distribuzionale era errore di media (quota per seme fra $0{,}988$ e $0{,}993$). Lo stesso trattamento rimuove solo il $68\%$ del divario del ramo non condizionato, che resta a $0{,}0998$: a parità di iniezione la nuvola condizionata e' \textbf{166 volte} più vicina al vero, quindi il condizionamento riduce di due ordini di grandezza anche l'errore di forma. Il pavimento di questi confronti non e' però lo zero — ricentrare impone alle due nuvole la stessa media campionaria, che due estrazioni dalla medesima distribuzione non condividono, e la U-statistica non distorta ne risente con un bias negativo. Il pavimento corretto, due metà della stessa cella l'una ricentrata sull'altra, vale $-0{,}00026$, misurato sul file di griglia sulle 24 celle interne.
+
+\textbf{Il limite e' quindi del modello, non del banco di prova.} Le due quantità si confrontano su base omogenea: il pavimento e' calcolato \emph{dentro la corsa}, sulla cella esclusa stessa, come MMD fra due metà delle sue finestre reali con la seconda ricentrata sulla prima. Subisce percio' lo stesso bias del pareggiamento delle medie delle due quantità che deve tarare, sta sulle medesime celle e condivide la medesima aggregazione. Vale $-0{,}00025$ in media sui cinque semi, contro il $-0{,}00026$ ottenuto indipendentemente sul file di griglia sulle 24 celle interne: due implementazioni distinte, su insiemi di celle diversi, concordi alla quarta cifra decimale.
+
+Rispetto a quel pavimento, con contrasti appaiati per (corsa, cella) e intervalli incrociati al 95\%, il \emph{segnale di forma} disponibile — l'eccesso del vicino reale ricentrato — vale $+0{,}00014$ $[+0{,}00011, +0{,}00018]$, 5 corse su 5; la forma della distribuzione di finestra \emph{varia} dunque fra celle adiacenti in modo piccolo ma statisticamente netto. L'\emph{errore di forma del generatore} vale $+0{,}00085$ $[+0{,}00057, +0{,}00116]$, anch'esso 5 su 5. I due intervalli \textbf{non si sovrappongono} — il limite inferiore del generatore, $0{,}00057$, sta oltre il triplo del limite superiore del segnale, $0{,}00018$ — quindi il divario non e' un artefatto di incertezza: il rapporto fra le stime puntuali vale \textbf{sei}, e la separazione permane negli intervalli ottenuti ricampionando entrambi gli assi. Resta un'inferenza sui dati osservati, non una validazione su dati indipendenti.
+
+Lo stesso riepilogo colloca anche l'interpolante: la sua distanza dal pavimento e' $+0{,}00308$, ventidue volte quella del vicino ricentrato. Le due costruzioni partono dalle medesime finestre reali della cella adiacente e differiscono solo per la media che vi viene imposta — quella interpolata nel primo caso, quella vera nel secondo — quindi la differenza misura l'errore di interpolazione della media e nient'altro. E' la conferma indipendente che, anche per il riferimento geometrico, cio' che separa dal vero e' la media e non la forma. Esiste dunque struttura condizionale oltre la media, e il generatore non la cattura perche' la propria imprecisione la sommerge: l'interpolazione vince non per assenza di segnale, ma perche' il segnale e' più fine della risoluzione del generatore. Ne seguono due bersagli quantificati: sull'asse distribuzionale l'eccesso di forma del generatore deve scendere da $0{,}00085$ al livello del segnale disponibile, $0{,}00014$, cioe' un fattore sei; sull'asse della media l'ampiezza della risposta condizionale va aumentata di circa un ordine di grandezza.
+
+\textbf{I due rami convergono su un reperto di metodo.} Su IDS l'obiettivo di addestramento — minimizzare una divergenza dai pochi attacchi osservati — e' disallineato rispetto al compito, che richiede copertura di attacchi \emph{non} osservati, e il protocollo standard con validazione dallo stesso split nasconde il disallineamento favorendo i metodi interpolativi. Su QKD la forma condizionata e' accurata ma il compito la mette alla prova solo marginalmente. In entrambi i casi il \emph{protocollo di valutazione} determina l'esito più del generatore. Tre conclusioni intermedie sono state ritirate dopo essere state misurate meglio: il divario della QGAN su IDS, sovrastimato dell'$80\%$ da un singolo split sfortunato; l'ipotesi che la distorsione delle dispersioni per feature lo spiegasse, sostenuta in un verso e smentita nell'altro; e la lettura secondo cui una maggiore profondità dell'ansatz peggiorerebbe il generatore, confusa con la qualità della calibrazione. Ogni correzione e' venuta da un controllo dichiarato prima della misura: e' la pratica che raccomandiamo più di qualunque singolo numero riportato qui.
+
+\section{Sviluppi Futuri}
+
+Gli interventi seguono l'ordine del rapporto fra informazione attesa e costo; i primi tre non richiedono nuovi addestramenti.
+
+\textbf{Misurare il segnale disponibile prima di addestrare.} Dato un banco per generazione condizionata, si misuri quanta discrepanza sopravvive al pareggiamento delle medie fra condizioni vicine, contro un pavimento costruito su due metà della medesima condizione — pavimento necessario, perche' il pareggiamento introduce un bias negativo che un confronto con lo zero scambia per assenza di struttura. Se l'eccesso e' nullo, nessun modello distribuzionale potra' superare un regressore della media, e l'esperimento va riprogettato anziche' eseguito.
+
+\textbf{Chiudere l'anello fra generatore e attributore.} Addestrare l'attributore sulle finestre generate per le celle escluse e misurarne lo skill, nella stessa unita' del divario di $0{,}097$ fra \texttt{random} e \texttt{interior}. Finche' non e' eseguito, nessun miglioramento dell'attribuzione e' attribuibile alla generazione.
+
+\textbf{Verificare due sensibilita' dichiarate.} Punteggiare \texttt{KDDTest+} con e senza troncamento finale, a modelli e soglie invariati; e misurare la frazione di massa sintetica esterna all'inviluppo convesso dei 53 attacchi, correlandola con la prestazione fuori distribuzione, cosi' che la spiegazione geometrica passi da coerente a quantificata.
+
+\textbf{Agire sui due bersagli numerici.} Arrestare l'addestramento sulla MMD \emph{ricentrata} separa fedelta' di forma e calibrazione della media, che l'arresto odierno confonde, e misura l'eccesso da ridurre: da $0{,}00085$ verso i $0{,}00014$ del segnale disponibile. Sull'asse della media, una ritaratura dell'ampiezza della risposta condizionale affronta un difetto di guadagno, non di struttura.
+
+\textbf{Allargare il banco di prova.} Le repliche vanno spostate dove sta la varianza, fra celle e non fra corse. Il regime non stazionario richiede una generazione dedicata, perche' le griglie con deriva gia' prodotte sono blocchi $2{\times}2{\times}2$ privi di celle interne. CICIDS2017 direbbe se l'inversione fra dentro e fuori distribuzione sia propria dell'estremo sbilanciamento o un artefatto di NSL-KDD; attacchi collettivi direbbero fin dove si estende l'accoppiamento a numeri casuali comuni. Una corsa su hardware NISQ, infine, metterebbe alla prova l'ipotesi che il rumore di dispositivo non aggiunga struttura oltre i primi momenti.
 
 % --- BIBLIOGRAFIA ---
 \bibliographystyle{IEEEtran}
