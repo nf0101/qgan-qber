@@ -73,7 +73,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-RADICE = Path(__file__).resolve().parent
+RADICE = Path(__file__).resolve().parents[1]
 
 # Il pacchetto vero sta in qgan/src/qgan/, non in qgan/: alla radice del
 # repo esiste anche un qgan/__init__.py che lo maschera se si lascia la

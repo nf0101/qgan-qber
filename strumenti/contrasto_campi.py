@@ -34,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-RADICE = Path(__file__).resolve().parent
+RADICE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RADICE / "qgan" / "scripts"))
 from analisi_appaiata import bootstrap, componenti  # noqa: E402
 
