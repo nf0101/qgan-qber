@@ -25,7 +25,7 @@ Questo progetto implementa una singola architettura **QGAN ibrida quantistico-cl
 - **O1 (Trasferibilità Architetturale):** Verificare la portabilità di un'architettura quantistica condivisa ($N=5$ qubit) tra domini di sicurezza eterogenei mantenendo congelata la dimensionalità della rappresentazione (_Feature Freezing_).
 - **RQ2 (Generazione Condizionata e Generalizzazione):** Verificare se il generatore condizionato riesca a ricostruire le metriche di canale su configurazioni di celle fisiche escluse dall'addestramento (_out-of-grid / held-out_).
 - **O3 (Attribuzione Causale del QBER):** Scomporre analiticamente l'errore totale osservato nel canale quantistico nel vettore delle frazioni causali costitutive:
-  $\text{QBER}_{\text{oss}} = \text{QBER}_{\text{attacco}} + \text{QBER}_{\text{rumore}} + \text{QBER}_{\text{rivelatore}} \implies y = (f_{\text{eve}}, f_{\text{canale}}, f_{\text{rivelatore}})$
+  `QBER_oss = QBER_attacco + QBER_rumore + QBER_rivelatore` $\implies y = ($ `f_eve`, `f_canale`, `f_rivelatore` $)$
 
 ---
 
