@@ -33,7 +33,7 @@ Questo progetto implementa una singola architettura **QGAN ibrida quantistico-cl
 
 ### 1. Generatore Quantistico ($G_\theta$) — _Qiskit 2.5.2_
 
-- **Registro:** 5 qubit ($N=5$), ciascuno mappato su un'osservabile fisica ($\text{QBER}_{\text{tot}}$), $(\text{QBER}_X$), $(\text{QBER}_Z$), $(\text{sift_rate}$), $(\text{loss_rate}$).
+- **Registro:** 5 qubit ($N=5$), ciascuno mappato su un'osservabile fisica ($\text{QBER}_{\text{tot}}, \text{QBER}_X, \text{QBER}_Z, \text{sift\_rate}, \text{loss\_rate}$).
 - **Encoding Latente:** Rotazioni $RY(z_i)$ con raggio calibrato ($r=0.82$) per QKD, $(r=0.93$) per IDS.
 - **Ansatz Quantistico:** Topology `EfficientSU2` con 4 ripetizioni (`reps=4`), entanglement lineare adiacente e 50 parametri addestrabili $\theta$.
 - **Condizionamento:** Iniezione delle variabili fisiche ($c$) tramite rotazioni $RZ(\pi \cdot c)$ condotte in _data re-uploading_ a due strati.
