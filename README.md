@@ -1,4 +1,4 @@
-# ⚛️ Progetto Quantum: Hybrid QGAN for Security Data Imbalance &amp; QBER Causal Attribution
+# ⚛️ QGAN for Addressing Security Data Imbalance and Causal Attribution of QBER
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
 [![Qiskit 2.5.2](https://img.shields.io/badge/Qiskit-2.5.2-purple.svg)](https://qiskit.org/)
