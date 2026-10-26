@@ -25,3 +25,14 @@ short-repository.md
 
 # backup lasciati dalle patch
 *.prima_*
+
+# artefatti di compilazione LaTeX
+docs/tex/*.aux
+docs/tex/*.bbl
+docs/tex/*.blg
+docs/tex/*.fdb_latexmk
+docs/tex/*.fls
+docs/tex/*.log
+docs/tex/*.out
+docs/tex/*.synctex.gz
+docs/tex/*.pdf
