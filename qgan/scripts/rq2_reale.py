@@ -196,6 +196,16 @@ def run_seed(seed, dati, steps, verbose, backend, quota_escluse=0.5,
             X_cond = cond.sample(n_gen, ch)
             X_unc = uncond.sample(n_gen)
             mu_cond, mu_unc = X_cond.mean(axis=0), X_unc.mean(axis=0)
+            # dump per la figura del ricentraggio, una cella sola
+            import os
+            if os.environ.get("DUMP_CELLA") and not globals().get("_dumped"):
+                import numpy as _np
+                _np.savez("cella_dump.npz", reali=Xh, generati=X_cond,
+                          mu_vero=mu_vero,
+                          coord=_np.asarray(ch, dtype=float),
+                          conf=_np.array(", ".join(str(v) for v in k)))
+                globals()["_dumped"] = True
+                print(f"[dump] scritto cella_dump.npz (cella {i}: {k})")
         else:
             # Due estrazioni, nell'ordine originale: file bit-identico.
             X_cond = X_unc = None
